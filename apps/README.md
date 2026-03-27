@@ -1,8 +1,8 @@
-# Carpeta `apps`
+# `apps` Folder
 
-Esta carpeta contiene **todas las aplicaciones del monorepo** relacionadas con la compañía para el proyecto transversal de AI Engineering (por ejemplo: aplicaciones web, APIs, dashboards internos, portales de clientes, etc.).
+This folder contains **all the applications of the monorepo** related to the company for the cross-functional AI Engineering project (for example: web applications, APIs, internal dashboards, customer portals, etc.).
 
-Cada subcarpeta dentro de `apps/` debe corresponder a **una aplicación concreta** (por ejemplo `web-portal`, `admin-api`, `backoffice-dashboard`) e incluir su propia documentación técnica y funcional.
+Each subfolder inside `apps/` must correspond to **one specific application** (for example: `web-portal`, `admin-api`, `backoffice-dashboard`) and include its own technical and functional documentation.
 
-- **Propósito principal**: centralizar en un único monorepo todas las aplicaciones que dan soporte a los casos de uso de la compañía.
-- **Recomendación**: documenta en este archivo (o en sub-READMEs) las aplicaciones que vayas añadiendo, su objetivo, tecnología usada y cómo ejecutarlas en desarrollo, pruebas y producción.
+- **Main purpose**: to centralize in a single monorepo all the applications that support the company's use cases.
+- **Recommendation**: document in this file (or in sub-READMEs) the applications you add, their objective, the technology used, and how to run them in development, testing, and production environments.
