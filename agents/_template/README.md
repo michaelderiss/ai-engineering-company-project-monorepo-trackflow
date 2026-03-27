@@ -1,6 +1,8 @@
-# Carpeta `agents/_template`
+# `agents/_template` folder
 
-Esta carpeta es una **plantilla base** para crear nuevos agentes dentro de `agents/`. Incluye una estructura mínima (código del agente, configuración y tests) para que los nuevos agentes nazcan con un estándar común.
+This folder is a **base template** for creating new agents under `agents/`. It includes a minimal structure (agent code, configuration, and tests) so new agents start from a shared standard.
 
-- **Propósito principal**: acelerar la creación de agentes y mantener consistencia (estructura, convenciones y testing) a lo largo del monorepo.
-- **Recomendación**: cuando añadas un nuevo agente, copia/adapta esta plantilla y documenta qué partes se modificaron (objetivo, herramientas, prompts, memoria, evaluaciones y tests).
+- **Main purpose**: speed up agent creation and keep consistency (structure, conventions, and testing) across the monorepo.
+- **Recommendation**: when you add a new agent, copy/adapt this template and document what changed (goal, tools, prompts, memory, evaluations, and tests).
+
+> _Spanish version: [README.es.md](./README.es.md)._

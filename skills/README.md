@@ -1,6 +1,8 @@
-# Carpeta `skills`
+# `skills` folder
 
-Esta carpeta contiene las **skills de agentes** (capacidades reusables) que ayudan a trabajar de forma consistente en el monorepo: investigación, análisis de datos, revisión de código, scraping, matemáticas, etc.
+This folder contains **agent skills** (reusable capabilities) that help you work consistently across the monorepo: research, data analysis, code review, scraping, math, and more.
 
-- **Propósito principal**: estandarizar cómo los agentes de IA asisten al equipo en los distintos hitos del proyecto transversal.
-- **Recomendación**: documenta cada skill que añadas (cuándo usarla, inputs/outputs esperados, ejemplos) y mantén una estructura clara por subcarpetas para facilitar su descubrimiento.
+- **Main purpose**: standardize how AI agents assist the team across the cross-functional project milestones.
+- **Recommendation**: document each skill you add (when to use it, expected inputs/outputs, examples) and keep a clear subfolder structure so skills are easy to discover.
+
+> _Spanish version: [README.es.md](./README.es.md)._

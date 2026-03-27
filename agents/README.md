@@ -1,8 +1,10 @@
-# Carpeta `agents`
+# `agents` folder
 
-Esta carpeta contiene los **agentes de IA** del monorepo (asistentes, copilotos internos, agentes de soporte/operaciones, etc.) que se construyen como parte de los hitos transversales de AI Engineering.
+This folder contains the monorepo’s **AI agents** (assistants, internal copilots, support/operations agents, etc.) built as part of the cross-functional AI Engineering milestones.
 
-Cada subcarpeta dentro de `agents/` debería representar **un agente concreto** (por ejemplo `support-agent`, `onboarding-agent`, `sales-assistant`) con su propia documentación: objetivo, capacidades, fuentes de conocimiento/memoria, herramientas disponibles y cómo probarlo.
+Each subfolder under `agents/` should represent **one concrete agent** (for example `support-agent`, `onboarding-agent`, `sales-assistant`) with its own documentation: goal, capabilities, knowledge/memory sources, available tools, and how to test it.
 
-- **Propósito principal**: centralizar el desarrollo de agentes reutilizables para la compañía dentro del monorepo.
-- **Recomendación**: documenta aquí el catálogo de agentes que se vaya creando y enlaza a los READMEs de cada agente.
+- **Main purpose**: centralize reusable agent development for the company in one monorepo.
+- **Recommendation**: maintain a catalog of agents here as they are created and link to each agent’s README.
+
+> _Spanish version: [README.es.md](./README.es.md)._

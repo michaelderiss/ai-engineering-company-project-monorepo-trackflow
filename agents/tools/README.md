@@ -1,6 +1,8 @@
-# Carpeta `agents/tools`
+# `agents/tools` folder
 
-Esta carpeta agrupa **herramientas reutilizables** que pueden usar los agentes del monorepo (por ejemplo: conectores a APIs internas, wrappers de bases de datos, utilidades de scraping, validadores, clientes de servicios, etc.).
+This folder groups **reusable tools** that agents in the monorepo can use (for example: connectors to internal APIs, database wrappers, scraping utilities, validators, service clients, etc.).
 
-- **Propósito principal**: evitar duplicación de código entre agentes y estandarizar cómo los agentes interactúan con sistemas de la compañía.
-- **Recomendación**: documenta cada herramienta que añadas (qué hace, entradas/salidas, permisos/seguridad, límites y ejemplos de uso) y enlázala desde los agentes que la consumen.
+- **Main purpose**: avoid duplicated code across agents and standardize how agents interact with company systems.
+- **Recommendation**: document each tool you add (what it does, inputs/outputs, permissions/security, limits, and usage examples) and link to it from the agents that use it.
+
+> _Spanish version: [README.es.md](./README.es.md)._

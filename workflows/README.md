@@ -1,6 +1,8 @@
-# Carpeta `workflows`
+# `workflows` folder
 
-Esta carpeta contiene **workflows y automatizaciones** del monorepo (por ejemplo con n8n u otras herramientas): integraciones, tareas programadas, orquestación de procesos, notificaciones, sincronizaciones y flujos que conectan sistemas.
+This folder holds **workflows and automations** for the monorepo (for example with n8n or other tools): integrations, scheduled jobs, process orchestration, notifications, synchronizations, and flows that connect systems.
 
-- **Propósito principal**: centralizar la automatización operativa relacionada con la compañía y los hitos del proyecto transversal.
-- **Recomendación**: documenta cada workflow que añadas (disparadores, entradas/salidas, credenciales requeridas, pasos, manejo de errores) y enlázalo con las apps/pipelines/agentes involucrados.
+- **Main purpose**: centralize operational automation related to the company and the cross-functional project milestones.
+- **Recommendation**: document each workflow you add (triggers, inputs/outputs, required credentials, steps, error handling) and link it to the involved apps, pipelines, and agents.
+
+> _Spanish version: [README.es.md](./README.es.md)._

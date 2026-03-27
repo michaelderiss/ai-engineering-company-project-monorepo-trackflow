@@ -1,6 +1,8 @@
-# Carpeta `shared`
+# `shared` folder
 
-Esta carpeta está reservada para **recursos compartidos no empaquetados** del monorepo: plantillas, esquemas, assets comunes, documentación técnica breve o configuraciones que se comparten entre varios componentes.
+This folder is reserved for **unbundled shared resources** in the monorepo: templates, schemas, common assets, short technical documentation, or configuration shared across several components.
 
-- **Propósito principal**: ofrecer un lugar neutral para elementos reutilizables que no encajan como aplicación (`apps/`) ni como paquete/librería (`packages/`).
-- **Recomendación**: documenta qué contiene cada subcarpeta/archivo y enlaza desde los componentes que lo consumen para mantener trazabilidad.
+- **Main purpose**: provide a neutral place for reusable items that do not fit as an application (`apps/`) or as a package/library (`packages/`).
+- **Recommendation**: document what each subfolder or file contains and link to it from consuming components to keep traceability.
+
+> _Spanish version: [README.es.md](./README.es.md)._

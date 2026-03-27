@@ -1,6 +1,8 @@
-# Carpeta `data/raw`
+# `data/raw` folder
 
-Esta carpeta está pensada para almacenar **datos en bruto** (raw) relacionados con la compañía: dumps, exports, archivos de ejemplo, muestras de eventos, o datasets sin transformar.
+This folder is intended for **raw data** related to the company: dumps, exports, sample files, event samples, or untransformed datasets.
 
-- **Propósito principal**: servir como zona de aterrizaje o referencia de datos originales antes de ser procesados por pipelines.
-- **Recomendación**: documenta el origen de cada dataset, formato, tamaño esperado, consideraciones de privacidad/PII y cómo se versiona (idealmente evitando subir datos sensibles al repositorio).
+- **Main purpose**: serve as a landing zone or reference for original data before pipelines process it.
+- **Recommendation**: document each dataset’s origin, format, expected size, privacy/PII considerations, and how it is versioned (ideally avoiding sensitive data in the repository).
+
+> _Spanish version: [README.es.md](./README.es.md)._
