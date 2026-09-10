@@ -9,13 +9,13 @@ export default function Page() {
         <p className="eyebrow">TrackFlow Backoffice</p>
         <h1>Dispatch Planning Console</h1>
         <p>
-          This screen imports the latest Milestone 2 dummy-order output and displays the warehouse assignment, carrier
-          decision, and delivery assumptions directly.
+          This screen imports Milestone 2 output generated from the testing-interface dataset and displays the
+          warehouse assignment, carrier decision, and delivery assumptions directly.
         </p>
       </header>
 
       <section className="panel">
-        <h2>Milestone 2 Input Snapshot</h2>
+        <h2>Milestone 2 Output Snapshot</h2>
         <div className="result-grid">
           <article>
             <h3>Order ID</h3>

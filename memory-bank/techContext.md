@@ -57,13 +57,13 @@ Observed characteristics:
 - `package.json` includes `typecheck` and TypeScript dev dependencies.
 - `tsconfig.json` and `next-env.d.ts` are present.
 - `uis/backoffice/lib/milestone2.ts` parses `.trackflow-dummy-order.txt` and returns structured values.
-- `uis/backoffice/lib/milestone2.ts` reads `.trackflow-milestone2-output.json` first and falls back to parsing `.trackflow-dummy-order.txt`.
+- `uis/backoffice/lib/milestone2.ts` reads `.trackflow-milestone2-output.json` as the single source for rendered Milestone 2 output.
 - `uis/backoffice/app/page.tsx` renders imported Milestone 2 output on screen.
 - `uis/backoffice/package.json` now runs `milestone2:sync` automatically before `dev` and `build`.
 
 Implication:
 
-- Backoffice currently depends on a file-based integration path to simulation output, which is good for milestone visibility but can become stale without regeneration.
+- Backoffice depends on a file-based integration path to generated output, which is good for milestone visibility but can become stale without regeneration.
 
 ### 4. Legacy/internal reference app
 
@@ -77,7 +77,7 @@ Implication:
 
 - Website section parity issue: resolved in `uis/website`.
 - JavaScript vs TypeScript issue for website/backoffice: resolved.
-- Backoffice inline logic issue: resolved by imported parsing flow from `.trackflow-dummy-order.txt`.
+- Backoffice inline logic issue: resolved by importing generated output based on `src/testing-interface.js` data.
 - Milestone output consistency is now driven by `scripts/generate_milestone2_output.cjs`, which writes both `.trackflow-dummy-order.txt` and `.trackflow-milestone2-output.json` from the shared helper using `src/testing-interface.js` data as input.
 
 ## Technical constraints and assumptions
