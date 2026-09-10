@@ -2,122 +2,91 @@
 
 ## Current repository baseline
 
-This repository is a monorepo template that already contains multiple top-level areas for apps, UIs, agents, skills, shared packages, scripts, workflows, and data. The company context has been replaced with TrackFlow-specific content, but the supporting agent infrastructure required by the challenge is not fully in place yet.
+This repository now combines three active implementation layers:
+
+- repo-level agent governance and memory-bank rules
+- Milestone 2 logistics utilities and test interface in `src/`
+- Next.js UI surfaces in `uis/website` and `uis/backoffice`
 
 ## Existing implementation surfaces
 
-### 1. Next.js UI app
+### 1. Milestone 2 TypeScript utility layer in src
 
-The main implemented application today is `uis/talent-pipeline-tracker`.
+The `src/` folder now includes a substantial Milestone 2 implementation, not only static prototype files.
 
-Current stack in that app:
+Core modules:
 
-- Next.js 16.2.12
-- React 19.2.4
-- TypeScript 5
-- Tailwind CSS 4
-- ESLint 9 with `eslint-config-next`
+- `src/types/models.ts`: domain types for products, shipments, carriers, inventory movements, and sample datasets.
+- `src/utils/collections.ts`: filtering and sorting utilities for product and carrier operations.
+- `src/utils/search.ts`: linear search and binary search utilities.
+- `src/utils/transformations.ts`: shipping-cost calculation, carrier scoring/selection, and aggregation utilities.
+- `src/utils/validations.ts`: validation helpers for product, shipment, and carrier entities.
+- `src/index.ts`: central export barrel.
+- `src/demo.ts`: demo runner that exercises all major utility functions.
+
+Milestone UI/test surface:
+
+- `src/index.html`: browser testing console for Milestone 2 operations.
+- `src/testing-interface.js`: event handlers and in-browser operation orchestration for filters, search, sorting, carrier scoring, reports, and validations.
+- `src/milestone2-output.js`: shared Milestone 2 output helper that powers dummy-order output generation for both browser testing and Node scripts.
+
+Implication:
+
+- Milestone 2 logic currently has a concrete home in `src/` and can be manually exercised from the test interface.
+- This logic is not yet packaged for direct reuse from `packages/shared`.
+
+### 2. Public website app
+
+`uis/website` is now a TypeScript Next.js app with Milestone 1 section parity restored.
 
 Observed characteristics:
 
-- App Router structure under `app/`
-- Strict TypeScript configuration with `noEmit`
-- Local path alias `@/*`
-- Client-side data fetching against an external API
-- Validation commands documented as `npm run typecheck`, `npm run lint`, and `npm run build`
+- App Router files use TypeScript (`layout.tsx`, `page.tsx`).
+- `package.json` includes `typecheck` and TypeScript dev dependencies.
+- `tsconfig.json` and `next-env.d.ts` are present.
+- The page includes header/nav, hero, benefits/services, contact section, and footer.
 
-Current business fit:
+### 3. Backoffice app
 
-- The app is functional, but it is built around candidate tracking and executive assistant recruitment.
-- It is not aligned with the logistics workflows described in `CONTEXT.md`.
-- It may still be useful as a structural reference for future TrackFlow internal applications because it already demonstrates typed records, list/detail flows, forms, filtering, and API integration patterns.
+`uis/backoffice` is now a TypeScript Next.js app and no longer computes carrier mapping inline in the page component.
 
-### 2. Static TrackFlow-branded frontend assets
+Observed characteristics:
 
-The `src/` folder contains standalone HTML and JavaScript files, including TrackFlow-branded content and client-side form validation logic. This indicates there is already some non-Next.js prototype or milestone work in the repo, separate from the `uis/` application structure.
-
-Implication:
-
-- The repository currently has more than one frontend implementation style.
-- Before expanding product surfaces, the team should decide which TrackFlow experiences stay as static pages and which move into structured app folders under `uis/`.
-
-### 3. Shared package
-
-The `packages/shared` package exists with minimal placeholder shared types:
-
-- package name: `@repo/shared-types`
-- current exports: basic `Id` and `BaseEntity`
+- App Router files use TypeScript (`layout.tsx`, `page.tsx`).
+- `package.json` includes `typecheck` and TypeScript dev dependencies.
+- `tsconfig.json` and `next-env.d.ts` are present.
+- `uis/backoffice/lib/milestone2.ts` parses `.trackflow-dummy-order.txt` and returns structured values.
+- `uis/backoffice/lib/milestone2.ts` reads `.trackflow-milestone2-output.json` first and falls back to parsing `.trackflow-dummy-order.txt`.
+- `uis/backoffice/app/page.tsx` renders imported Milestone 2 output on screen.
+- `uis/backoffice/package.json` now runs `milestone2:sync` automatically before `dev` and `build`.
 
 Implication:
 
-- Shared typing infrastructure exists, but domain modeling has not started.
-- Future TrackFlow entities such as inventory items, shipments, carriers, returns, clients, tickets, and KPI records should be added here when cross-app reuse becomes real.
+- Backoffice currently depends on a file-based integration path to simulation output, which is good for milestone visibility but can become stale without regeneration.
 
-## Monorepo conventions already documented in the repo
+### 4. Legacy/internal reference app
 
-- `uis/` is reserved for user-interface projects.
-- The `uis/README.md` explicitly recommends `uis/website` for the public site and `uis/backoffice` for the internal admin application.
-- `apps/` is described as the place for monorepo applications more generally.
-- `scripts/` is meant for reproducible support tooling.
-- `.agents/` is the configuration area for repo-specific agent rules and skills, distinct from the product-facing `agents/` folder.
+`uis/talent-pipeline-tracker` remains a functional TypeScript Next.js app but is domain-misaligned (recruitment rather than logistics). It should be treated as reference or migration candidate, not as the business source-of-truth UI.
 
-## Gaps relative to the challenge requirements
+### 5. Shared package
 
-- `AGENTS.md` now exists, but its promised `.agents` coverage is still only partially implemented.
-- `.agents/` now contains a `rules/UpdateMemoryBank.md` rule plus reusable skills at `.agents/skills/dummy-order-simulation/SKILL.md` and `.agents/skills/dummy-return-simulation/SKILL.md`.
-- Repo-specific skill coverage has started, but the `.agents/skills/` area still needs additional capabilities beyond dummy order and reverse-logistics simulations.
-- The implemented UI path does not yet match the recommended `uis/website` and `uis/backoffice` structure.
-- There is no `services/` directory in the current root structure, even though the challenge guidance expects backend services to live there when created.
-- There is no root workspace package manager configuration or visible monorepo task runner configuration yet.
+`packages/shared` still provides minimal placeholder shared types (`Id`, `BaseEntity`) and has not yet absorbed Milestone 2 domain models.
+
+## Feedback-related status
+
+- Website section parity issue: resolved in `uis/website`.
+- JavaScript vs TypeScript issue for website/backoffice: resolved.
+- Backoffice inline logic issue: resolved by imported parsing flow from `.trackflow-dummy-order.txt`.
+- Milestone output consistency is now driven by `scripts/generate_milestone2_output.cjs`, which writes both `.trackflow-dummy-order.txt` and `.trackflow-milestone2-output.json` from the shared helper.
 
 ## Technical constraints and assumptions
 
-- Work should preserve the existing monorepo layout instead of introducing parallel structures.
-- Changes should remain compatible with Windows-based local development.
-- Since there is already working Next.js code in the repo, reusing its conventions is lower risk than inventing a second frontend stack unless a milestone explicitly requires otherwise.
-- Because the existing implemented app is off-domain, future work must consciously rename, repurpose, or isolate it so agents do not infer the wrong business model.
-- Memory-bank files and `AGENTS.md` now provide the first layer of source-of-truth context, but `.agents/skills/` and broader rule coverage still need to be built out.
+- Work must preserve monorepo structure and remain Windows-friendly.
+- Milestone 2 logic in `src/` is currently authoritative for local utility behavior and demo coverage.
+- A future decision is needed on consolidation: keep `src/` as milestone playground vs move reusable logic to `packages/shared`.
 
-## Recommended near-term architecture direction
+## Validation and working practices
 
-### Public website
-
-- Create or migrate toward `uis/website` for the TrackFlow corporate site.
-- Use TrackFlow branding, company story, and service lines from `CONTEXT.md`.
-
-### Internal backoffice
-
-- Create or migrate toward `uis/backoffice` for internal TrackFlow operations.
-- Start with one logistics-facing route or dashboard instead of extending the candidate tracker domain.
-
-### Shared domain model
-
-- Expand `packages/shared` only when there is actual reuse pressure.
-- Prefer a small first set of domain types: warehouse, SKU, shipment, carrier, return request, support ticket, and client account.
-
-### Backend and integrations
-
-- Introduce `services/` when TrackFlow APIs or workflow services are added.
-- Treat external carrier APIs, warehouse systems, and reporting pipelines as future integration boundaries.
-
-## Validation and working practices observed so far
-
-- The Next.js app already advertises `lint`, `typecheck`, and `build` as baseline validation commands.
-- There is no evidence yet of central telemetry, automated testing infrastructure at the repo root, or cross-app orchestration.
-- `.agents/rules/UpdateMemoryBank.md` now formalizes that meaningful repo changes must be reflected in `memory-bank/progress.md`, `memory-bank/projectbrief.md`, or `memory-bank/techContext.md` as appropriate.
-- `.agents/skills/dummy-order-simulation/SKILL.md` defines a TrackFlow order simulation workflow and writes its output to the hidden root file `.trackflow-dummy-order.txt`.
-- `.agents/skills/dummy-return-simulation/SKILL.md` defines a TrackFlow reverse-logistics simulation workflow and writes its output to the hidden root file `.trackflow-dummy-return.txt`.
-- Documentation and structure are still ahead of implementation, which makes accurate project memory especially important right now.
-
-## Git and repository hygiene lessons learned
-
-A real repository-level issue surfaced during the main UI setup: the first push of the `feature/agent-memory-bank` branch was rejected by GitHub because generated Next.js output and dependency files were accidentally included in the commit. This produced the GitHub `GH001` large-file rejection and a failed remote push.
-
-The root cause was straightforward: local installs created large `node_modules/` and `.next/` folders, and those generated artifacts were accidentally staged. The immediate fix was to remove them from Git tracking and ignore them at the repository root with the following rules:
-
-- `**/node_modules/`
-- `.next/`
-- `out/`
-- `.DS_Store`
-
-This is now part of the repo's operational baseline. In future work, generated artifacts must stay untracked while only source files, config, and documentation are committed.
+- Website and backoffice have local validation commands: `npm run typecheck` and `npm run build`.
+- Memory updates remain mandatory when architecture, milestone output, or workflow interpretation changes.
+- Git hygiene from earlier GH001 issue remains relevant: generated artifacts (`node_modules`, `.next`, `out`) must stay untracked.

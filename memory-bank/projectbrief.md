@@ -70,13 +70,15 @@ The course guidance requires the repo to become a structured monorepo where:
 ## Current reality in this repository
 
 - The TrackFlow business context is present in `CONTEXT.md`.
-- `memory-bank/` exists but was empty before this update.
-- `AGENTS.md` now exists as the repo-level operating contract for agents.
-- `.agents/` now contains repo-specific rule coverage, starting with memory-bank maintenance.
-- The repo already contains one implemented UI in `uis/talent-pipeline-tracker`, but it is a hiring-pipeline application for executive assistant recruitment rather than a logistics-facing TrackFlow product.
-- The repo also contains standalone static assets under `src/`, including TrackFlow-branded HTML and validation logic, which appear to be separate from the Next.js app structure.
-- The repo now has TrackFlow-specific UI scaffolding under `uis/website` and `uis/backoffice`, each seeded as a valid Next.js app for public and internal product surfaces.
-- Repository hygiene is now explicitly enforced: generated Next.js directories such as `node_modules/` and `.next/` are ignored in the root `.gitignore` so large dependency outputs do not get pushed to GitHub and trigger the GH001 rejection path.
+- `memory-bank/` is active and enforced by repo workflow (`AGENTS.md` and `.agents/rules/UpdateMemoryBank.md`).
+- A Milestone 2 implementation now exists under `src/` with typed logistics models, utility functions (filters/search/scoring/transformations/validations), a barrel export, and a test/demo interface.
+- Milestone 2 output artifacts are now generated through shared helper logic in `src/milestone2-output.js` and synced by `scripts/generate_milestone2_output.cjs`.
+- `uis/website` and `uis/backoffice` are now TypeScript Next.js surfaces rather than JavaScript-only scaffolds.
+- The website includes Milestone 1 structural sections (header/nav/contact/footer) as part of the public TrackFlow presentation.
+- Backoffice displays imported Milestone 2 dummy-order output from `.trackflow-dummy-order.txt` on screen via `uis/backoffice/lib/milestone2.ts`.
+- Backoffice build/dev flows auto-sync Milestone 2 output before startup and display the generated output on screen via `uis/backoffice/lib/milestone2.ts`.
+- The repo still contains `uis/talent-pipeline-tracker`, which remains useful as a technical reference but is not aligned to TrackFlow logistics scope.
+- Repository hygiene is enforced: generated Next.js directories such as `node_modules/` and `.next/` are ignored in the root `.gitignore` so large dependency outputs are not pushed.
 
 ## Scope boundaries for upcoming work
 

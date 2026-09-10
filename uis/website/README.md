@@ -10,7 +10,7 @@ This app communicates TrackFlow's logistics identity and operating footprint (Un
 
 - Next.js App Router
 - React
-- JavaScript
+- TypeScript
 
 ## Run locally
 
