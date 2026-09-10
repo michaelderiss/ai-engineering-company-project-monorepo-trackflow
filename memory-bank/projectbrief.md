@@ -75,9 +75,10 @@ The course guidance requires the repo to become a structured monorepo where:
 - Milestone 2 output artifacts are now generated through shared helper logic in `src/milestone2-output.js` and synced by `scripts/generate_milestone2_output.cjs`.
 - `uis/website` and `uis/backoffice` are now TypeScript Next.js surfaces rather than JavaScript-only scaffolds.
 - The website includes Milestone 1 structural sections (header/nav/contact/footer) as part of the public TrackFlow presentation.
-- In `src/TrackFlow.html`, the primary nav now includes clickable section links for `Header`, `Nav`, and `Footer`, plus `Apply` to `application.html`.
+- In `src/TrackFlow.html`, the primary nav now includes clickable section links for `Header`, `Nav`, `Contact`, and `Footer`, plus `Apply` to `application.html`.
 - Backoffice displays imported Milestone 2 output from `.trackflow-milestone2-output.json` on screen via `uis/backoffice/lib/milestone2.ts`.
 - Backoffice build/dev flows auto-sync Milestone 2 output generated from `src/testing-interface.js` data before startup.
+- Milestone 2 output generation supports selecting different shipment records from the testing interface dataset instead of always using the first shipment.
 - The repo still contains `uis/talent-pipeline-tracker`, which remains useful as a technical reference but is not aligned to TrackFlow logistics scope.
 - Repository hygiene is enforced: generated Next.js directories such as `node_modules/` and `.next/` are ignored in the root `.gitignore` so large dependency outputs are not pushed.
 
