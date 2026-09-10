@@ -136,6 +136,11 @@ const shipments = [
   }
 ];
 
+const milestone2OrderContext = {
+  orderId: 'TF-ORDER-001',
+  client: 'Northstar Outfitters'
+};
+
 const resultMeta = document.getElementById('resultMeta');
 const resultOutput = document.getElementById('resultOutput');
 
@@ -185,8 +190,8 @@ function buildMilestone2OutputFromInterface() {
     products,
     carriers,
     shipments,
-    orderId: 'TF-ORDER-001',
-    client: 'Northstar Outfitters'
+    orderId: milestone2OrderContext.orderId,
+    client: milestone2OrderContext.client
   });
 
   return {

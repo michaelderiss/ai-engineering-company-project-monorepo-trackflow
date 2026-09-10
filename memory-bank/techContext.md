@@ -29,6 +29,7 @@ Milestone UI/test surface:
 - `src/index.html`: browser testing console for Milestone 2 operations.
 - `src/testing-interface.js`: event handlers and in-browser operation orchestration for filters, search, sorting, carrier scoring, reports, and validations.
 - `src/milestone2-output.js`: shared Milestone 2 output helper that powers dummy-order output generation for both browser testing and Node scripts.
+- `scripts/generate_milestone2_output.cjs` now reads `products`, `carriers`, `shipments`, and optional `milestone2OrderContext` directly from `src/testing-interface.js`, making the sync artifacts source-aligned with the UI test dataset.
 
 Implication:
 
@@ -77,7 +78,7 @@ Implication:
 - Website section parity issue: resolved in `uis/website`.
 - JavaScript vs TypeScript issue for website/backoffice: resolved.
 - Backoffice inline logic issue: resolved by imported parsing flow from `.trackflow-dummy-order.txt`.
-- Milestone output consistency is now driven by `scripts/generate_milestone2_output.cjs`, which writes both `.trackflow-dummy-order.txt` and `.trackflow-milestone2-output.json` from the shared helper.
+- Milestone output consistency is now driven by `scripts/generate_milestone2_output.cjs`, which writes both `.trackflow-dummy-order.txt` and `.trackflow-milestone2-output.json` from the shared helper using `src/testing-interface.js` data as input.
 
 ## Technical constraints and assumptions
 
