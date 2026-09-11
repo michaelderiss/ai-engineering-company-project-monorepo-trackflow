@@ -31,6 +31,7 @@ Milestone UI/test surface:
 - `src/milestone2-output.js`: shared Milestone 2 output helper that powers dummy-order output generation for both browser testing and Node scripts.
 - `scripts/generate_milestone2_output.cjs` now reads `products`, `carriers`, `shipments`, and optional `milestone2OrderContext` directly from `src/testing-interface.js`, making the sync artifacts source-aligned with the UI test dataset.
 - `src/milestone2-output.js` now supports `selectedShipmentId`, enabling generation from the shipment currently selected in `src/testing-interface.js`.
+- `src/testing-interface.js` now maintains an `activeShipmentId` context updated by user operations and passes it to milestone output generation.
 - `src/TrackFlow.html` includes anchor-based top navigation links targeting `#header`, `#site-nav-target`, `#contact`, and `#footer`, with `Apply` linking to `application.html`.
 
 Implication:

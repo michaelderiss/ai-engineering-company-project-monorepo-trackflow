@@ -157,6 +157,7 @@ const searchWeight = document.getElementById('searchWeight');
 const shipmentSelect = document.getElementById('shipmentSelect');
 const carrierSelect = document.getElementById('carrierSelect');
 const milestone2OutputApi = window.TrackFlowMilestone2Output;
+let activeShipmentId = null;
 
 function roundTo2(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -177,6 +178,20 @@ function printResult(label, payload) {
   resultOutput.textContent = JSON.stringify(payload, null, 2);
 }
 
+function setActiveShipment(id) {
+  const shipment = findShipmentById(shipments, id);
+  activeShipmentId = shipment ? shipment.id : null;
+
+  if (shipment) {
+    shipmentSelect.value = shipment.id;
+  }
+}
+
+function findFirstShipmentBySku(items, sku) {
+  const normalizedSku = sku.trim().toLowerCase();
+  return items.find((shipment) => shipment.sku.toLowerCase() === normalizedSku) ?? null;
+}
+
 function buildMilestone2OutputFromInterface() {
   if (!milestone2OutputApi) {
     return {
@@ -191,7 +206,8 @@ function buildMilestone2OutputFromInterface() {
     carriers,
     shipments,
     orderId: milestone2OrderContext.orderId,
-    client: milestone2OrderContext.client
+    client: milestone2OrderContext.client,
+    selectedShipmentId: activeShipmentId || shipmentSelect.value || undefined
   });
 
   return {
@@ -545,10 +561,17 @@ document.getElementById('runSort').addEventListener('click', () => {
 document.getElementById('runProductSearch').addEventListener('click', () => {
   const sku = searchProductSku.value.trim();
   const found = findProductBySKU(products, sku);
+  const matchingShipment = found ? findFirstShipmentBySku(shipments, found.sku) : null;
+
+  if (matchingShipment) {
+    setActiveShipment(matchingShipment.id);
+  }
 
   printResult('Find Product By SKU', {
     sku,
-    result: found
+    result: found,
+    activeShipmentId: activeShipmentId,
+    activeShipmentFromSku: matchingShipment?.id ?? null
   });
 });
 
@@ -556,9 +579,14 @@ document.getElementById('runShipmentSearch').addEventListener('click', () => {
   const id = searchShipmentId.value.trim();
   const found = findShipmentById(shipments, id);
 
+  if (found) {
+    setActiveShipment(found.id);
+  }
+
   printResult('Find Shipment By ID', {
     id,
-    result: found
+    result: found,
+    activeShipmentId: activeShipmentId
   });
 });
 
@@ -586,6 +614,10 @@ document.getElementById('runCarrierOps').addEventListener('click', () => {
   const shipment = findShipmentById(shipments, shipmentSelect.value);
   const carrier = carriers.find((item) => item.id === carrierSelect.value) ?? null;
 
+  if (shipment) {
+    setActiveShipment(shipment.id);
+  }
+
   if (!shipment || !carrier) {
     printResult('Carrier Ops', {
       error: 'Please select both a shipment and a carrier.'
@@ -610,7 +642,8 @@ document.getElementById('runCarrierOps').addEventListener('click', () => {
     selectedCarrier: carrier.name,
     selectedCarrierCost: cost,
     selectedCarrierScore: score,
-    bestCarrier
+    bestCarrier,
+    activeShipmentId: activeShipmentId
   });
 });
 
@@ -643,6 +676,7 @@ document.getElementById('runMilestone2Output').addEventListener('click', () => {
   }
 
   printResult('Generate Milestone 2 Output', {
+    activeShipmentId: activeShipmentId || shipmentSelect.value || null,
     output: generated.output,
     textPreview: generated.formattedText
   });
@@ -660,3 +694,4 @@ document.getElementById('clearResults').addEventListener('click', () => {
 });
 
 populateSelectOptions();
+setActiveShipment(shipmentSelect.value);

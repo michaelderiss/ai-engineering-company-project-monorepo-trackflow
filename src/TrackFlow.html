@@ -395,17 +395,19 @@
   </style>
 </head>
 <body>
-  <header class="site-header" id="header">
+  <div id="header" aria-hidden="true"></div>
+  <header class="site-header">
     <div class="container header-inner">
       <a class="brand" href="#header" aria-label="Track Flow home">
         <img src="shared/TrackFlowLogo.png" alt="Track Flow logo" />
         <span>Track Flow</span>
       </a>
 
-      <nav id="nav" aria-label="Primary navigation">
+      <nav aria-label="Primary navigation">
         <ul class="nav-links">
           <li><a href="#header">Header</a></li>
-          <li><a href="#nav">Nav</a></li>
+          <li><a href="#site-nav-target">Nav</a></li>
+          <li><a href="#contact">Contact</a></li>
           <li><a href="#footer">Footer</a></li>
           <li><a href="application.html">Apply</a></li>
         </ul>
@@ -414,7 +416,7 @@
   </header>
 
   <main>
-    <section class="hero" id="services">
+    <section class="hero" id="site-nav-target">
       <div class="container hero-layout">
         <div>
           <span class="eyebrow">Logistics Partner</span>

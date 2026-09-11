@@ -84,8 +84,11 @@ function estimateDeliveryWindow(priority, avgDeliveryDays) {
   return avgDeliveryDays <= 2 ? "2 to 3 business days" : "2 to 4 business days";
 }
 
-function buildMilestone2Output({ products, carriers, shipments, orderId, client }) {
-  const shipment = shipments[0];
+function buildMilestone2Output({ products, carriers, shipments, orderId, client, selectedShipmentId }) {
+  const selectedShipment = selectedShipmentId
+    ? shipments.find((candidate) => candidate.id === selectedShipmentId) ?? null
+    : null;
+  const shipment = selectedShipment ?? shipments[0];
   const product = shipment ? findProductBySKU(products, shipment.sku) : null;
 
   if (!shipment || !product) {
