@@ -138,7 +138,8 @@ const shipments = [
 
 const milestone2OrderContext = {
   orderId: 'TF-ORDER-001',
-  client: 'Northstar Outfitters'
+  client: 'Northstar Outfitters',
+  selectedShipmentId: 'SH-2024-8821'
 };
 
 const resultMeta = document.getElementById('resultMeta');
@@ -181,6 +182,7 @@ function printResult(label, payload) {
 function setActiveShipment(id) {
   const shipment = findShipmentById(shipments, id);
   activeShipmentId = shipment ? shipment.id : null;
+  milestone2OrderContext.selectedShipmentId = activeShipmentId;
 
   if (shipment) {
     shipmentSelect.value = shipment.id;
@@ -207,7 +209,11 @@ function buildMilestone2OutputFromInterface() {
     shipments,
     orderId: milestone2OrderContext.orderId,
     client: milestone2OrderContext.client,
-    selectedShipmentId: activeShipmentId || shipmentSelect.value || undefined
+    selectedShipmentId:
+      activeShipmentId ||
+      shipmentSelect.value ||
+      milestone2OrderContext.selectedShipmentId ||
+      undefined
   });
 
   return {
@@ -677,6 +683,7 @@ document.getElementById('runMilestone2Output').addEventListener('click', () => {
 
   printResult('Generate Milestone 2 Output', {
     activeShipmentId: activeShipmentId || shipmentSelect.value || null,
+    syncCommand: `cd uis/backoffice && npm run milestone2:sync -- --shipment=${activeShipmentId || shipmentSelect.value || milestone2OrderContext.selectedShipmentId || ''}`,
     output: generated.output,
     textPreview: generated.formattedText
   });

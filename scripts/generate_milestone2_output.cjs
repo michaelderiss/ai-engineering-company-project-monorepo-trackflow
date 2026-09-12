@@ -43,11 +43,27 @@ function loadTestingInterfaceDataset() {
     shipments,
     orderId: orderContext.orderId,
     client: orderContext.client,
+    selectedShipmentId: orderContext.selectedShipmentId,
   };
 }
 
+function parseShipmentArg() {
+  const argument = process.argv.find((item) => item.startsWith("--shipment="));
+  if (!argument) {
+    const envShipment = process.env.TRACKFLOW_SHIPMENT_ID;
+    return envShipment && envShipment.trim().length > 0 ? envShipment.trim() : undefined;
+  }
+
+  const value = argument.split("=")[1];
+  return value && value.trim().length > 0 ? value.trim() : undefined;
+}
+
 const dataset = loadTestingInterfaceDataset();
-const output = buildMilestone2Output(dataset);
+const selectedShipmentId = parseShipmentArg() ?? dataset.selectedShipmentId;
+const output = buildMilestone2Output({
+  ...dataset,
+  selectedShipmentId,
+});
 const txt = formatMilestone2DummyOrderText(output);
 
 fs.writeFileSync(txtPath, `${txt}\n`, "utf8");
@@ -56,3 +72,6 @@ fs.writeFileSync(jsonPath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
 console.log(`Milestone 2 output synced:`);
 console.log(`- ${path.relative(repoRoot, txtPath)}`);
 console.log(`- ${path.relative(repoRoot, jsonPath)}`);
+if (selectedShipmentId) {
+  console.log(`- selected shipment: ${selectedShipmentId}`);
+}

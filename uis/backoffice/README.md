@@ -4,9 +4,14 @@ Internal logistics operations entry view for TrackFlow.
 
 ## Purpose
 
-This app starts the internal `uis/backoffice` surface with a company-relevant route (`/`) that imports generated Milestone 2 output from testing-interface data and displays warehouse assignment, carrier recommendation, and expected delivery windows.
+This app starts the internal `uis/backoffice` surface with a company-relevant home route (`/`) that presents a page launcher for internal tools.
 
-Output source used by `uis/backoffice/lib/milestone2.ts`:
+Current launcher options:
+
+1. Milestone 2 Output (`/milestone-2-output`) in this app
+2. Talent Pipeline Tracker (`http://localhost:3001`) in a new tab
+
+Milestone 2 output source used by `uis/backoffice/lib/milestone2.ts`:
 
 1. `.trackflow-milestone2-output.json`
 
@@ -27,6 +32,12 @@ npm run dev
 ```
 
 `npm run dev` and `npm run build` automatically run `npm run milestone2:sync` first.
+
+To sync a specific shipment from the testing-interface dataset:
+
+```bash
+npm run milestone2:sync -- --shipment=SH-2024-9001
+```
 
 Open `http://localhost:3000`.
 

@@ -27,6 +27,8 @@ The repository has moved beyond pure setup: core logistics utility functions now
 - Backoffice route `/` now imports and renders generated Milestone 2 output via `uis/backoffice/lib/milestone2.ts` using `.trackflow-milestone2-output.json` sourced from the testing-interface dataset.
 - Both `uis/website` and `uis/backoffice` now include TypeScript toolchain files and scripts (`tsconfig.json`, `next-env.d.ts`, `typecheck`).
 - `uis/backoffice` now auto-syncs Milestone 2 output before `dev` and `build` through `npm run milestone2:sync`.
+- For non-default scenarios, sync can now target a shipment explicitly: `npm run milestone2:sync -- --shipment=<shipmentId>`.
+- For automated runs (`dev`/`build`), shipment selection can also be overridden with `TRACKFLOW_SHIPMENT_ID=<shipmentId>`.
 
 ## Feedback status snapshot
 
