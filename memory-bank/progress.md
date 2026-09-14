@@ -18,8 +18,13 @@
   - /incident-file-analyzer hosts the incident analysis implementation.
   - /website and /talent-pipeline-tracker are available as additional launcher options.
 - Implemented backoffice incident-file-analyzer page with upload and CSV download.
+- Implemented supplier directory milestone in services/api with TinyDB persistence and startup seeding.
+- Added supplier endpoints for list/filter, create, detail, rate update, status update, and delete.
+- Added backoffice /suppliers page with live API-backed filters, supplier registration form, rate editing, and status toggle.
+- Added root pyproject.toml script entry so `uv run seed` is defined when `uv` is installed in the environment.
 
 ## Notes
 
 - No customer emails are printed or exported by script/API/UI outputs.
 - API dependency pin uses FastAPI + Pydantic v1 compatibility due Python 3.15 beta environment constraints.
+- `uv run seed` is configured in-repo, but this machine currently does not have `uv` installed on PATH and package download for `uv` was blocked by network connectivity during validation.

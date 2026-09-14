@@ -11,6 +11,12 @@ type AppOption = {
 
 const APP_OPTIONS: AppOption[] = [
   {
+    id: "suppliers",
+    label: "Supplier Directory",
+    description: "Manage TrackFlow suppliers, rates, and suspension status.",
+    path: "/suppliers",
+  },
+  {
     id: "incident-file-analyzer",
     label: "Incident File Analyzer",
     description: "Upload incidents CSV and review quality and CX metrics.",

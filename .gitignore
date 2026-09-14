@@ -6,3 +6,5 @@ out/
 results.csv
 __pycache__/
 *.pyc
+services/api/data/
+uv.lock

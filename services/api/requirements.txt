@@ -3,3 +3,4 @@ uvicorn==0.35.0
 python-multipart==0.0.20
 pydantic<2
 starlette<0.28
+tinydb==4.8.0

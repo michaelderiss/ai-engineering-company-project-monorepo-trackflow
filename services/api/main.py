@@ -18,8 +18,10 @@ from shared.incidents_analysis import (  # noqa: E402
     analyze_incidents_text,
     build_export_rows,
 )
+from services.api.database import seed_suppliers  # noqa: E402
+from services.api.routes.suppliers import router as suppliers_router  # noqa: E402
 
-app = FastAPI(title="TrackFlow Incidents API", version="1.0.0")
+app = FastAPI(title="TrackFlow API", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,6 +37,14 @@ app.add_middleware(
 )
 
 _LAST_ANALYSIS: dict | None = None
+
+
+@app.on_event("startup")
+def ensure_seed_data() -> None:
+    seed_suppliers()
+
+
+app.include_router(suppliers_router)
 
 
 @app.get("/health")
