@@ -24,7 +24,9 @@ The repository has moved beyond pure setup: core logistics utility functions now
 - The public site under `uis/website` now includes Milestone 1 structural sections (header/navigation, contact section, and footer) and has been migrated to TypeScript app files.
 - The static milestone page `src/TrackFlow.html` now has explicit clickable nav targets for Header (`#header`), Nav (`#site-nav-target`), Contact (`#contact`), and Footer (`#footer`), while keeping Apply linked to `application.html`.
 - The internal app under `uis/backoffice` has been migrated to TypeScript app files.
+- Backoffice now uses `/` as an Operations Home page with descriptive text and a large dropdown launcher for internal pages.
 - Backoffice route `/` now imports and renders generated Milestone 2 output via `uis/backoffice/lib/milestone2.ts` using `.trackflow-milestone2-output.json` sourced from the testing-interface dataset.
+- Milestone 2 output details were moved to `/milestone-2-output` inside the backoffice app.
 - Both `uis/website` and `uis/backoffice` now include TypeScript toolchain files and scripts (`tsconfig.json`, `next-env.d.ts`, `typecheck`).
 - `uis/backoffice` now auto-syncs Milestone 2 output before `dev` and `build` through `npm run milestone2:sync`.
 - For non-default scenarios, sync can now target a shipment explicitly: `npm run milestone2:sync -- --shipment=<shipmentId>`.

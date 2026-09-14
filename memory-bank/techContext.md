@@ -61,9 +61,10 @@ Observed characteristics:
 - App Router files use TypeScript (`layout.tsx`, `page.tsx`).
 - `package.json` includes `typecheck` and TypeScript dev dependencies.
 - `tsconfig.json` and `next-env.d.ts` are present.
+- Route `/` is now an Operations Home launcher with a dropdown for available internal pages.
 - `uis/backoffice/lib/milestone2.ts` parses `.trackflow-dummy-order.txt` and returns structured values.
 - `uis/backoffice/lib/milestone2.ts` reads `.trackflow-milestone2-output.json` as the single source for rendered Milestone 2 output.
-- `uis/backoffice/app/page.tsx` renders imported Milestone 2 output on screen.
+- `uis/backoffice/app/milestone-2-output/page.tsx` renders imported Milestone 2 output on screen.
 - `uis/backoffice/package.json` now runs `milestone2:sync` automatically before `dev` and `build`.
 
 Implication:

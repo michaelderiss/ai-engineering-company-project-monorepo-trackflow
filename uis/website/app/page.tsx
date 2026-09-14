@@ -28,13 +28,16 @@ export default function Page() {
           <nav aria-label="Primary navigation">
             <ul className="nav-links">
               <li>
-                <a href="#services">Services</a>
+                <a href="#services">Header</a>
               </li>
               <li>
-                <a href="#benefits">Benefits</a>
+                <a href="#benefits">Nav</a>
               </li>
               <li>
                 <a href="#contact">Contact</a>
+              </li>
+              <li>
+                <a href="#contact">Footer</a>
               </li>
               <li>
                 <a href="/application.html">Apply</a>
