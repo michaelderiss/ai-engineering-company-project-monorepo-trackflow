@@ -9,7 +9,10 @@ dependencies = [
   "python-multipart==0.0.20",
   "pydantic<2",
   "starlette<0.28",
-  "tinydb==4.8.0"
+  "tinydb==4.8.0",
+  "passlib[bcrypt]==1.7.4",
+  "python-jose[cryptography]==3.5.0",
+  "bcrypt<4.1"
 ]
 
 [project.scripts]

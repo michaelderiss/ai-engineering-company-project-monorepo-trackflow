@@ -79,6 +79,15 @@ Implication:
 
 `packages/shared` still provides minimal placeholder shared types (`Id`, `BaseEntity`) and has not yet absorbed Milestone 2 domain models.
 
+### 6. Auth/API service layer
+
+The API service now includes a TinyDB-backed identity layer for TrackFlow users and profiles. Relevant implementation details:
+
+- `services/api/auth.py` centralizes JWT creation, decoding, and bearer-token validation via `OAuth2PasswordBearer` and `python-jose`.
+- `services/api/database.py` persists user and profile records in `services/api/data/users.json` with a one-to-one profile mapping on `user_id`.
+- `services/api/routes/auth.py`, `services/api/routes/users.py`, and `services/api/routes/profiles.py` expose the login and protected CRUD flow.
+- `main.py` protects the internal API routes and seeds an admin user by default so the service can authenticate staff requests with a bearer token.
+
 ## Feedback-related status
 
 - Website section parity issue: resolved in `uis/website`.

@@ -22,6 +22,7 @@
 - Added supplier endpoints for list/filter, create, detail, rate update, status update, and delete.
 - Added backoffice /suppliers page with live API-backed filters, supplier registration form, rate editing, and status toggle.
 - Added root pyproject.toml script entry so `uv run seed` is defined when `uv` is installed in the environment.
+- Implemented JWT-based auth for the TrackFlow API, including TinyDB-backed user and profile storage, `/auth/login`, `/users`, `/profiles`, and protected internal routes requiring bearer-token validation.
 
 ## Notes
 

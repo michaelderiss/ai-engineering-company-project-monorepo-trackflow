@@ -5,7 +5,7 @@ from io import StringIO
 from pathlib import Path
 import sys
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
@@ -18,8 +18,13 @@ from shared.incidents_analysis import (  # noqa: E402
     analyze_incidents_text,
     build_export_rows,
 )
-from services.api.database import seed_suppliers  # noqa: E402
+from services.api.auth import get_current_user  # noqa: E402
+from services.api.database import seed_suppliers, seed_users  # noqa: E402
+from services.api.models import User  # noqa: E402
+from services.api.routes.auth import router as auth_router  # noqa: E402
+from services.api.routes.profiles import router as profiles_router  # noqa: E402
 from services.api.routes.suppliers import router as suppliers_router  # noqa: E402
+from services.api.routes.users import router as users_router  # noqa: E402
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
 
@@ -42,8 +47,12 @@ _LAST_ANALYSIS: dict | None = None
 @app.on_event("startup")
 def ensure_seed_data() -> None:
     seed_suppliers()
+    seed_users()
 
 
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(profiles_router)
 app.include_router(suppliers_router)
 
 
@@ -53,7 +62,10 @@ def health() -> dict[str, str]:
 
 
 @app.post("/api/incidents/analyze")
-async def analyze_incidents(file: UploadFile = File(...)) -> dict:
+async def analyze_incidents(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> dict:
     global _LAST_ANALYSIS
 
     filename = (file.filename or "").lower()
@@ -86,7 +98,7 @@ async def analyze_incidents(file: UploadFile = File(...)) -> dict:
 
 
 @app.get("/api/incidents/results/export")
-def export_last_results() -> StreamingResponse:
+def export_last_results(current_user: User = Depends(get_current_user)) -> StreamingResponse:
     if _LAST_ANALYSIS is None:
         raise HTTPException(status_code=404, detail="No analysis available. Upload a CSV first.")
 
