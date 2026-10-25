@@ -42,6 +42,25 @@ def my_profile(current_user: User = Depends(get_current_user)) -> Profile:
     return profile
 
 
+@router.patch("/me", response_model=Profile)
+def patch_my_profile(
+    payload: ProfileCreate,
+    current_user: User = Depends(get_current_user),
+) -> Profile:
+    """Update or create the profile for the current user."""
+    existing = get_profile_for_user(current_user.id)
+    if existing is None:
+        try:
+            return create_profile_for_user(current_user.id, payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    updated = update_profile_for_user(current_user.id, payload)
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
+    return updated
+
+
 @router.get("/{profile_id}", response_model=Profile)
 def get_profile_by_id(
     profile_id: int,

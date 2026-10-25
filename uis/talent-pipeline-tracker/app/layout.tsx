@@ -27,7 +27,20 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <AuthGuardScript />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
+}
+
+/**
+ * Inline client-side guard that protects talent pipeline routes.
+ * Redirects to backoffice /login if no auth token is found.
+ */
+function AuthGuardScript() {
+  const code = `(function(){var t=null;try{t=localStorage.getItem("trackflow_access_token");}catch(e){}if(!t){window.location.href="/login";}})();`;
+  // eslint-disable-next-line
+  return <script dangerouslySetInnerHTML={code} />;
 }

@@ -88,6 +88,40 @@ The API service now includes a TinyDB-backed identity layer for TrackFlow users 
 - `services/api/routes/auth.py`, `services/api/routes/users.py`, and `services/api/routes/profiles.py` expose the login and protected CRUD flow.
 - `main.py` protects the internal API routes and seeds an admin user by default so the service can authenticate staff requests with a bearer token.
 
+### 7. Frontend auth layer (AUTH-02)
+
+The backoffice and talent-pipeline-tracker apps now implement a complete JWT-based authentication flow:
+
+**Auth library** (`uis/backoffice/lib/auth.ts`):
+- Token storage in `localStorage` under key `trackflow_access_token`.
+- `getToken()` / `setToken()` / `clearToken()` — safe localStorage access with try/catch fallback.
+- `isAuthenticated()` — boolean check for existing token.
+- `redirectToLogin()` / `redirectToHome()` — window-level redirects.
+- `apiFetch<T>(path, options?)` — generic fetch wrapper that attaches `Authorization: Bearer <token>`, auto-sets `Content-Type: application/json` (skipped for `FormData` bodies), and handles 401 responses by clearing the token and redirecting to `/login`. Parses structured error responses (string `detail` or array of validation errors).
+- `API_BASE` sourced from `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` env var (default `http://localhost:8000`).
+
+**Route-level auth guard** (`uis/backoffice/app/layout.tsx` and `uis/talent-pipeline-tracker/app/layout.tsx`):
+- Inline `<AuthGuardScript />` in the `<head>` that runs before any page content.
+- Public paths (`/login`, `/register`, `/logout`) are exempt from auth checks.
+- All other paths redirect to `/login` if no token is found in localStorage.
+- Talent pipeline tracker uses the same shared token for route protection (no login UI — users are redirected to the backoffice login page).
+
+**Auth pages** (all under `uis/backoffice/app/`):
+- `/login` — email/password form → POST `/auth/login` (form-urlencoded) → stores JWT → redirects to `/`.
+- `/register` — email/password + optional profile fields → POST `/users` (JSON) → POST `/auth/login` → stores JWT → redirects to `/`.
+- `/account/profile` — loads user from GET `/auth/me` and profile from GET `/profiles/me` → editable form for display_name/phone/address → saves via PATCH `/profiles/me`.
+- `/logout` — calls `clearToken()` → redirects to `/login`.
+
+**Protected page updates** (existing pages that now send Bearer tokens):
+- `uis/backoffice/app/suppliers/page.tsx` — all 4 API calls use local `authFetch()` wrapper with token injection and 401 handling.
+- `uis/backoffice/app/incident-file-analyzer/page.tsx` — POST to analysis endpoint uses `authFetch()`, correctly handling FormData (no Content-Type override).
+
+**API endpoint added** (`services/api/routes/profiles.py`):
+- `PATCH /profiles/me` — creates profile if missing (via `create_profile_for_user`), updates if existing (via `update_profile_for_user`). Accepts `ProfileCreate` payload, returns `Profile` response model.
+
+**Scope**:
+- `uis/website/` — completely unaffected (no auth guard, no changes).
+
 ## Feedback-related status
 
 - Website section parity issue: resolved in `uis/website`.

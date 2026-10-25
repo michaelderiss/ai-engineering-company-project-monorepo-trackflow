@@ -213,3 +213,66 @@ td {
   background: #fde7e9;
   color: #8b1e2d;
 }
+
+/* ===== Auth forms / success / nav ===== */
+
+.required {
+  color: #b42318;
+}
+
+.text-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.success {
+  color: #155724;
+  font-weight: 600;
+}
+
+input[type="email"],
+input[type="password"],
+input[type="tel"] {
+  width: 100%;
+  margin-top: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: #fff;
+}
+
+nav.top-nav {
+  background: var(--ink);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+nav.top-nav .nav-brand {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1.1rem;
+}
+
+nav.top-nav .nav-links {
+  margin-left: auto;
+  display: flex;
+  gap: 0.75rem;
+}
+
+nav.top-nav .nav-link {
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+}
+
+nav.top-nav .nav-link:hover {
+  background: rgba(255,255,255,0.15);
+}

@@ -13,7 +13,27 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <AuthGuardScript />
+      </head>
       <body>{children}</body>
     </html>
   );
+}
+
+/**
+ * Returns a <script> tag that protects all backoffice routes except
+ * public ones (login, register, logout). Runs before any page content.
+ */
+function AuthGuardScript() {
+  const code = `
+(function(){
+  var p = window.location.pathname;
+  if(p==="/login"||p==="/register"||p==="/logout")return;
+  var t=null;try{t=localStorage.getItem("trackflow_access_token");}catch(e){}
+  if(!t){window.location.href="/login";}
+})();
+  `;
+  // eslint-disable-next-line
+  return <script dangerouslySetInnerHTML={code} />;
 }
