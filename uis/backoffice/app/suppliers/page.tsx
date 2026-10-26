@@ -234,9 +234,9 @@ export default function SuppliersPage() {
     }
 
     setError(null);
-    const response = await fetch(`${API_BASE}/suppliers/${supplierId}/rate`, {
-      method: "PATCH",authFetch(`${API_BASE}/suppliers/${supplierId}/rate`, {
-      method: "PATCH"}),
+    const response = await authFetch(`${API_BASE}/suppliers/${supplierId}/rate`, {
+      method: "PATCH",
+      body: JSON.stringify({ rate_per_shipment: rate }),
     });
 
     if (!response.ok) {
@@ -251,9 +251,9 @@ export default function SuppliersPage() {
   async function toggleStatus(supplier: Supplier): Promise<void> {
     setError(null);
     const nextStatus = supplier.status === "active" ? "suspended" : "active";
-    const response = await fetch(`${API_BASE}/suppliers/${supplier.id}/status`, {
-      method: "PATCH",authFetch(`${API_BASE}/suppliers/${supplier.id}/status`, {
-      method: "PATCH"
+    const response = await authFetch(`${API_BASE}/suppliers/${supplier.id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: nextStatus }),
     });
 
     if (!response.ok) {

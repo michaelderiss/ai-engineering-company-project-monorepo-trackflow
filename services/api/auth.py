@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -9,12 +11,21 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from services.api.database import get_user_by_email, get_user_by_id
-from services.api.models import Token, TokenData, User
+from services.api.database import (
+    consume_password_reset_token,
+    get_user_by_email,
+    get_user_by_id,
+    store_password_reset_token,
+    update_user,
+)
+from services.api.models import Token, TokenData, User, UserUpdate
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "trackflow-dev-secret-key")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30")
+)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -92,3 +103,45 @@ async def login_user(form_data: OAuth2PasswordRequestForm) -> Token:
         )
     access_token = create_access_token({"sub": str(user.id)})
     return Token(access_token=access_token, token_type="bearer")
+
+
+def create_password_reset_token(user: User) -> tuple[str, datetime]:
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    reset_id = secrets.token_urlsafe(32)
+    token = jwt.encode(
+        {
+            "sub": str(user.id),
+            "purpose": "password_reset",
+            "jti": reset_id,
+            "iat": now,
+            "exp": expires_at,
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
+    token_hash = hashlib.sha256(reset_id.encode("utf-8")).hexdigest()
+    store_password_reset_token(token_hash, user.id, expires_at)
+    return token, expires_at
+
+
+def reset_user_password(token: str, new_password: str) -> bool:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "password_reset":
+            return False
+        user_id = int(payload["sub"])
+        reset_id = payload["jti"]
+        if not isinstance(reset_id, str) or not reset_id:
+            return False
+    except (JWTError, KeyError, TypeError, ValueError):
+        return False
+
+    token_hash = hashlib.sha256(reset_id.encode("utf-8")).hexdigest()
+    return consume_password_reset_token(token_hash, user_id, get_password_hash(new_password))
+
+
+def change_user_password(user: User, current_password: str, new_password: str) -> bool:
+    if not verify_password(current_password, user.hashed_password):
+        return False
+    return update_user(user.id, UserUpdate(password=new_password)) is not None

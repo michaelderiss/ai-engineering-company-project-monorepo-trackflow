@@ -165,6 +165,7 @@ export default function ProfilePage() {
             <p>{user?.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}</p>
           </article>
         </div>
+        <p><a href="/account/change-password" className="text-link">Change password</a></p>
       </section>
 
       <section className="panel">

@@ -42,6 +42,21 @@
 - **Verified**: Public website (`uis/website/app/layout.tsx`) is completely untouched — no auth guard script was added.
 - **Scope**: Backoffice app is fully protected. Talent pipeline tracker has route-level protection but no login UI (it shares the backoffice login). Public website is completely unaffected.
 
+## AUTH-03 — Password recovery and change
+
+- Added `POST /auth/forgot-password`, which issues a signed reset token for active users and queues a link through Resend as a background task. The endpoint returns the same 200 confirmation for known and unknown email addresses without waiting on provider latency.
+- Added `POST /auth/reset-password`, which validates the token signature, purpose, expiry, and server-side one-use record before updating the password hash. Invalid, expired, and replayed tokens return 400.
+- Added authenticated `POST /auth/change-password`, which verifies the current password before applying the new password and returns 400 for an incorrect current password.
+- Added persistent token records in TinyDB, storing a hash of each reset token ID and marking a record used when the password changes.
+- Added Resend integration in `services/api/email.py`; API key and sender are environment-only values. Root `.env.example`, `.gitignore` rules, `python-dotenv` loading, and `services/api/README.md` document local setup.
+- Added backoffice `/forgot-password` and `/reset-password` public pages, plus protected `/account/change-password`. Login links to recovery; the profile view links to password change. Reset pages are exempt from the inline route guard.
+- Added auth API tests for account enumeration resistance, successful reset and token replay rejection, expired token rejection, and change-password current-password checks.
+- Repaired malformed supplier PATCH calls that prevented app-wide typechecking; they now use the existing authenticated fetch helper and send the expected JSON payloads.
+- Moved logout token clearing/redirect into a client effect so the auth page can be statically prerendered.
+- **Verified**: `tests/test_auth_api.py` passes (5 tests); `uis/backoffice` TypeScript typecheck passes.
+- **Verified**: `uis/backoffice` production build passes and generates the new reset/change-password routes.
+- **Setup requirement**: Configure a Resend API key and verified sender in the local `.env` or deployment environment before expecting real reset emails.
+
 ## Notes
 
 - No customer emails are printed or exported by script/API/UI outputs.

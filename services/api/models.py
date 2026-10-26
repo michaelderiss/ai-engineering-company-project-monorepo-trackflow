@@ -101,6 +101,20 @@ class TokenData(BaseModel):
     user_id: int | None = None
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+
 class SupplierCreate(BaseModel):
     name: str = Field(..., min_length=1)
     country: Country

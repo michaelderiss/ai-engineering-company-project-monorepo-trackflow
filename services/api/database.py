@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 
 from passlib.context import CryptContext
 from tinydb import Query, TinyDB
@@ -23,6 +24,7 @@ from services.api.models import (
 DB_PATH = Path(__file__).resolve().parent / "data" / "suppliers.json"
 USER_DB_PATH = Path(__file__).resolve().parent / "data" / "users.json"
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_password_reset_lock = Lock()
 
 
 def get_password_hash(password: str) -> str:
@@ -265,6 +267,47 @@ def update_user(user_id: int, payload: UserUpdate) -> User | None:
         updated_document = user_table.get(doc_id=user_id)
         updated_profile = profile_table.get(query.user_id == user_id)
         return _user_from_document(updated_document, updated_profile)
+
+
+def store_password_reset_token(token_hash: str, user_id: int, expires_at: datetime) -> None:
+    with _password_reset_lock, get_user_db() as db:
+        token_table = db.table("password_reset_tokens")
+        token_table.insert(
+            {
+                "token_hash": token_hash,
+                "user_id": user_id,
+                "expires_at": expires_at.isoformat(),
+                "used_at": None,
+            }
+        )
+
+
+def consume_password_reset_token(
+    token_hash: str,
+    user_id: int,
+    new_hashed_password: str,
+) -> bool:
+    with _password_reset_lock, get_user_db() as db:
+        token_table = db.table("password_reset_tokens")
+        user_table = db.table("users")
+        query = Query()
+        token_document = token_table.get(query.token_hash == token_hash)
+        user_document = user_table.get(doc_id=user_id)
+        if token_document is None or user_document is None:
+            return False
+        if token_document.get("user_id") != user_id or token_document.get("used_at") is not None:
+            return False
+
+        expires_at = datetime.fromisoformat(token_document["expires_at"])
+        if expires_at <= datetime.now(timezone.utc):
+            return False
+
+        user_table.update(
+            {"hashed_password": new_hashed_password, "updated_at": _now_iso()},
+            doc_ids=[user_id],
+        )
+        token_table.update({"used_at": _now_iso()}, doc_ids=[token_document.doc_id])
+        return True
 
 
 def delete_user(user_id: int) -> bool:

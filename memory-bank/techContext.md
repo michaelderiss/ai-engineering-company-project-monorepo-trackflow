@@ -122,6 +122,16 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 **Scope**:
 - `uis/website/` — completely unaffected (no auth guard, no changes).
 
+### 8. Password recovery and change (AUTH-03)
+
+- `POST /auth/forgot-password` looks up active users, issues a signed JWT with a `password_reset` purpose and configured expiry, persists a hashed token ID in the TinyDB `password_reset_tokens` table, and queues reset email delivery through FastAPI background tasks. Its response is identical for registered and unknown emails; delivery failures are logged without changing that response or waiting on Resend latency.
+- `POST /auth/reset-password` validates signature, expiry, token purpose, matching server-side state, and unused status. It stores the new bcrypt hash and marks the token used. The token record stores no raw reset token.
+- `POST /auth/change-password` requires a valid bearer token and verifies the current password before calling the existing user update path.
+- Token expiry is configured with `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default 30). The email link base is `BACKOFFICE_URL` (default `http://localhost:3000`). Resend uses `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; `services/api/main.py` loads the root `.env` through `python-dotenv` before importing auth settings. `JWT_SECRET_KEY` is also loaded from the environment; the development fallback is generated per process, so deployments must configure one stable value shared by API instances.
+- Backoffice routes: `/forgot-password` and `/reset-password` are public; `/account/change-password` remains behind the existing auth guard. Login and profile pages link to the respective workflows.
+- Root `.env.example` documents required settings; `.gitignore` excludes `.env` and other local env files while permitting examples. `services/api/README.md` documents Resend setup and API startup.
+- TinyDB reset-token consumption is serialized within one API process. For multi-worker production deployments, move identity/token persistence to a transactional database to guarantee race-free one-time consumption across processes.
+
 ## Feedback-related status
 
 - Website section parity issue: resolved in `uis/website`.

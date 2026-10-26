@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { clearToken, redirectToLogin } from "../../lib/auth";
 
 export default function LogoutPage() {
-  clearToken();
-  redirectToLogin();
+  useEffect(() => {
+    clearToken();
+    redirectToLogin();
+  }, []);
 
   // Fallback in case JavaScript redirect fails
   return (

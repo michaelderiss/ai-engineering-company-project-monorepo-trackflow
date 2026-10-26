@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { apiFetch, setToken, redirectToHome } from "../../lib/auth";
 
 export default function LoginPage() {
@@ -9,6 +9,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [resetNotice, setResetNotice] = useState(false);
+
+  useEffect(() => {
+    setResetNotice(new URLSearchParams(window.location.search).get("passwordReset") === "success");
+  }, []);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +66,7 @@ export default function LoginPage() {
     <main>
       <h1>Sign in to TrackFlow</h1>
       <p>Enter your credentials to access the backoffice.</p>
+      {resetNotice && <p className="success">Your password has been reset. Sign in with your new password.</p>}
 
       <section className="panel">
         <form className="stack" onSubmit={handleLogin}>
@@ -91,6 +97,8 @@ export default function LoginPage() {
             </label>
             {fieldErrors.password && <p className="error">{fieldErrors.password}</p>}
           </div>
+
+          <a href="/forgot-password" className="text-link">Forgot your password?</a>
 
           {error && <p className="error">{error}</p>}
 
