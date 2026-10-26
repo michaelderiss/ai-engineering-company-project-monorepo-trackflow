@@ -4,6 +4,8 @@ The password recovery flow sends reset links through Resend. Copy the root `.env
 
 The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` defaults to 30, and `BACKOFFICE_URL` defaults to `http://localhost:3000`; the generated reset link points to the backoffice app. `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` configures the backoffice API address.
 
+For local development, Resend delivery failures (missing config, blocked network, rejected sender) automatically fall back to printing the reset link in the API console. This keeps the forgot/reset flow usable without a reachable email provider; real mail delivery still requires a verified Resend sender.
+
 Run the API from the repository root with:
 
 ```powershell

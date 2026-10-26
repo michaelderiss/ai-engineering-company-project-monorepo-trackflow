@@ -49,6 +49,7 @@
 - Added authenticated `POST /auth/change-password`, which verifies the current password before applying the new password and returns 400 for an incorrect current password.
 - Added persistent token records in TinyDB, storing a hash of each reset token ID and marking a record used when the password changes.
 - Added Resend integration in `services/api/email.py`; API key and sender are environment-only values. Root `.env.example`, `.gitignore` rules, `python-dotenv` loading, and `services/api/README.md` document local setup.
+- Added console fallback in email delivery: when Resend is unconfigured, blocked, or rejects a send, the generated reset link is printed to the API console so the forgot/reset flow remains usable locally.
 - Added backoffice `/forgot-password` and `/reset-password` public pages, plus protected `/account/change-password`. Login links to recovery; the profile view links to password change. Reset pages are exempt from the inline route guard.
 - Added auth API tests for account enumeration resistance, successful reset and token replay rejection, expired token rejection, and change-password current-password checks.
 - Repaired malformed supplier PATCH calls that prevented app-wide typechecking; they now use the existing authenticated fetch helper and send the expected JSON payloads.

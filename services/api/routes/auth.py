@@ -33,7 +33,7 @@ def _deliver_reset_email(recipient: str, reset_url: str) -> None:
     try:
         send_password_reset_email(recipient, reset_url)
     except Exception:
-        logger.exception("Password reset email delivery failed")
+        logger.exception("Password reset delivery failed unexpectedly")
 
 
 @router.post("/login", response_model=Token)

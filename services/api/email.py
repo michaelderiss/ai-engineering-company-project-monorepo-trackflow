@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -10,12 +12,27 @@ class EmailDeliveryError(RuntimeError):
     pass
 
 
+logger = logging.getLogger(__name__)
+
+
+def _log_reset_link_fallback(recipient: str, reset_url: str) -> None:
+    """Print the reset link so local/dev flows still work without SMTP/Resend."""
+    print(
+        "\n[TrackFlow password reset fallback]\n"
+        f"  recipient : {recipient}\n"
+        f"  link      : {reset_url}\n",
+        file=sys.stderr,
+    )
+
+
 def send_password_reset_email(recipient: str, reset_url: str) -> None:
     api_key = os.getenv("RESEND_API_KEY")
     sender = os.getenv("RESEND_FROM_EMAIL")
     expiry_minutes = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30"))
     if not api_key or not sender:
-        raise EmailDeliveryError("Resend email configuration is missing.")
+        logger.warning("Resend email configuration missing; using console fallback for %s", recipient)
+        _log_reset_link_fallback(recipient, reset_url)
+        return
 
     payload = json.dumps(
         {
