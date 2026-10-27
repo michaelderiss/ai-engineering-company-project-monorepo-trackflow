@@ -77,7 +77,7 @@ Implication:
 
 ### 5. Shared package
 
-`packages/shared` still provides minimal placeholder shared types (`Id`, `BaseEntity`) and has not yet absorbed Milestone 2 domain models.
+`packages/shared` retains placeholder TypeScript types (`Id`, `BaseEntity`) and now also owns Python incident CSV validation and manager contracts/mappings. Milestone 2 TypeScript domain models remain in `src/`.
 
 ### 6. Auth/API service layer
 
@@ -127,10 +127,22 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - `POST /auth/forgot-password` looks up active users, issues a signed JWT with a `password_reset` purpose and configured expiry, persists a hashed token ID in the TinyDB `password_reset_tokens` table, and queues reset email delivery through FastAPI background tasks. Its response is identical for registered and unknown emails; delivery failures are logged without changing that response or waiting on Resend latency.
 - `POST /auth/reset-password` validates signature, expiry, token purpose, matching server-side state, and unused status. It stores the new bcrypt hash and marks the token used. The token record stores no raw reset token.
 - `POST /auth/change-password` requires a valid bearer token and verifies the current password before calling the existing user update path.
-- Token expiry is configured with `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default 30). The email link base is `BACKOFFICE_URL` (default `http://localhost:3000`). Resend uses `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; `services/api/main.py` loads the root `.env` through `python-dotenv` before importing auth settings. `JWT_SECRET_KEY` is also loaded from the environment; the development fallback is generated per process, so deployments must configure one stable value shared by API instances. Reset email delivery falls back to printing the reset link in the API console when Resend is unconfigured, blocked by the network, or rejects the sender, so the local flow works without real mail delivery.
+- Token expiry is configured with `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` (default 30). The email link base is `BACKOFFICE_URL` (default `http://localhost:3000`). Resend uses `RESEND_API_KEY` and `RESEND_FROM_EMAIL`; `services/api/main.py` loads the root `.env` (not `uis/.env`) through `python-dotenv` before importing auth settings. `JWT_SECRET_KEY` is also loaded from the environment; the development fallback is generated per process, so deployments must configure one stable value shared by API instances. Reset email delivery falls back to printing the reset link in the API console when Resend is unconfigured, blocked by the network, or rejects the sender, so the local flow works without real mail delivery.
+- Backoffice reads the API base from `uis/backoffice/.env.local` (`NEXT_PUBLIC_INCIDENTS_API_BASE_URL`, git-ignored); that value is baked in at build/start time, so it must stay in sync with the root `.env` when the API URL changes.
 - Backoffice routes: `/forgot-password` and `/reset-password` are public; `/account/change-password` remains behind the existing auth guard. Login and profile pages link to the respective workflows.
 - Root `.env.example` documents required settings; `.gitignore` excludes `.env` and other local env files while permitting examples. `services/api/README.md` documents Resend setup and API startup.
 - TinyDB reset-token consumption is serialized within one API process. For multi-worker production deployments, move identity/token persistence to a transactional database to guarantee race-free one-time consumption across processes.
+
+### 9. Centralized Incident Manager (CIM1-CIM3)
+
+- Business contract: `trackflow-BRIEFING.en.md`. Shared CSV rules are in `packages/shared/incident_validation.py`; manager Pydantic contracts, allowed values, display labels, transformations, and lifecycle transitions are in `packages/shared/incidents.py`.
+- `shared/incidents_analysis/analysis.py` imports the extracted validator, preserving analyzer behavior. `scripts/seed_incidents.py` reuses it before mapping valid CSV rows to customer incidents; date/title/branch/category/status mapping matches the briefing.
+- `services/api/incidents.py` uses standard-library SQLite with database CHECK constraints, parameterized queries, transactional status changes, and a separate unique import ledger. Storage: git-ignored `services/api/data/incidents.sqlite3`. No new dependencies; auth/suppliers remain TinyDB-backed.
+- `services/api/routes/incidents.py` exposes bearer-protected POST/GET `/api/incidents`, GET detail, PATCH status, GET summary, and GET options. Static analyzer routes remain registered before the detail route. Options supply the frontend's labels and valid next statuses, avoiding duplicate frontend enums.
+- The API returns scoped JSON 400 field errors for manager validation, 404 for missing records, and generic JSON 500 responses for unexpected errors. Read endpoints support empty storage. Summary is global, independent of list filters, with zeros for every allowed value.
+- `/incidents` is a protected backoffice page with form, list, filters, and summary sections. `uis/backoffice/lib/incidents.ts` provides a timeout-aware authenticated API client and typed field errors. The page isolates request states, preserves form input on failure, and rolls optimistic status changes back if the update fails.
+- Historical seed is explicit (`python scripts/seed_incidents.py`), never an automatic startup import. Expected seed-only totals are 95 incidents, statuses 29 open/52 resolved/14 discarded, categories 14 lost_parcel/45 carrier_issue/19 delivery_failure/17 returns_issue, and branches 50 la_office/45 zaragoza_office.
+- Tests in `tests/test_incidents_api.py` isolate persistence using temporary databases. Browser failure checks use intercepted responses rather than disrupting the user's running API. Setup and manual verification live in existing app/API READMEs.
 
 ## Feedback-related status
 

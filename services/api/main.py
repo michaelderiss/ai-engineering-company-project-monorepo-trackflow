@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import csv
+import logging
 from io import StringIO
 from pathlib import Path
 import sys
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +30,7 @@ from services.api.routes.auth import router as auth_router  # noqa: E402
 from services.api.routes.profiles import router as profiles_router  # noqa: E402
 from services.api.routes.suppliers import router as suppliers_router  # noqa: E402
 from services.api.routes.users import router as users_router  # noqa: E402
+from services.api.routes.incidents import router as incidents_router  # noqa: E402
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
 
@@ -138,6 +142,47 @@ def export_last_results(current_user: User = Depends(get_current_user)) -> Strea
     )
 
 
+app.include_router(incidents_router)
+
+
+def is_manager_request(request):
+    path = request.url.path
+    return path.startswith("/api/incidents") and path not in (
+        "/api/incidents/analyze", "/api/incidents/results/export",
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    if not is_manager_request(request):
+        return await request_validation_exception_handler(request, exc)
+    errors = {}
+    for error in exc.errors():
+        field = str(error["loc"][-1])
+        if error["type"] == "value_error.missing":
+            message = "This field is required."
+        elif error["type"] == "value_error.const":
+            message = "Please choose an available option."
+        elif "min_length" in error["type"]:
+            message = "Please enter a value."
+        elif "max_length" in error["type"]:
+            message = "Please use 120 characters or fewer."
+        else:
+            message = "Please enter a valid value."
+        errors[field] = message
+    return JSONResponse({"message": "Please check the highlighted fields.", "errors": errors}, status_code=400)
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(request, exc):
+    logging.getLogger(__name__).error("API request failed", exc_info=exc)
+    return JSONResponse({"message": "Something went wrong. Please try again."}, status_code=500)
+
+
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_, exc: HTTPException) -> PlainTextResponse:
+async def http_exception_handler(request, exc: HTTPException):
+    if is_manager_request(request):
+        if isinstance(exc.detail, dict):
+            return JSONResponse({"message": "Please check the highlighted fields.", "errors": exc.detail}, status_code=exc.status_code, headers=exc.headers)
+        return JSONResponse({"message": str(exc.detail)}, status_code=exc.status_code, headers=exc.headers)
     return PlainTextResponse(str(exc.detail), status_code=exc.status_code)

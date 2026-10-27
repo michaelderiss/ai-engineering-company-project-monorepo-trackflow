@@ -44,3 +44,42 @@ Open `http://localhost:3000`.
 ## Scope note
 
 If this UI starts depending on real APIs or workers, add those backend services under `/services` following `services/README.md`.
+
+## Incident Manager: Browser Verification
+
+The Operations Home launcher includes **Incident Manager** at `/incidents`. Registration, listing, and global summary sections are available on the same protected page. No new API keys are needed.
+
+Start the API and backoffice from the repository root in separate PowerShell terminals:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/seed_incidents.py
+.\.venv\Scripts\python.exe -m uvicorn services.api.main:app --reload
+```
+
+```powershell
+npm --prefix uis/backoffice run dev
+```
+
+Use the printed backoffice URL, sign in, and select Incident Manager. The API defaults to `http://localhost:8000`; if needed, set `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` in `uis/backoffice/.env.local` and restart the frontend. Production `npm run start` requires `npm run build` first; public API URLs are baked into that build.
+
+1. Before creating records, check Summary against the API README's expected 95-record totals. Re-running the seed must not change them. Later browser-created incidents increase these totals.
+2. Submit the empty registration form. Required-field errors must appear beside the fields without sending a request. Capture the PR validation screenshot here.
+3. Choose Origin = Branch. The Branch field must be highlighted and show Central, Los Angeles Warehouse/Office, and Zaragoza Warehouse/Office with the briefing's full labels. It remains required and visible for every origin.
+4. Enter a title and description, choose a category, Open status, origin, and branch. Submit. The button must show Registering and be disabled while pending. Success clears the form and updates the list and summary.
+5. Filter the list by status, origin, branch, and category. Select a combination with no matches to check the empty-state message. Expand an incident's Description to inspect it. Capture a loaded-list screenshot.
+6. On an Open incident, choose In progress, then Resolved. A resolved/discarded incident must have no further status control. Open can also be discarded; in-progress incidents can be resolved or discarded.
+7. In browser DevTools, throttle the network and refresh the list or submit a form. Loading indicators must remain visible and duplicate submissions must be disabled.
+8. Use DevTools request blocking for a URL pattern ending in `/api/incidents/*/status`, then attempt a change on another open incident. The previous status must be restored with an error notification. Remove the block afterwards.
+9. Block `*/api/incidents/summary` and reload. The summary must show a retry action while the form and list remain usable. Unblock and retry. Repeat for the list request to verify its independent retry state.
+10. Stop the API and try submitting a filled form. A plain-language error must appear without clearing the entered values or blanking the page. Restart the API and retry.
+11. Capture the summary screenshot for the PR. Check the form and filters on a narrow/mobile viewport; the table scrolls horizontally within its own area.
+
+Status options only show valid next steps. Invalid transitions sent directly via the API return 400. Seed-only historical values map CLOSED to resolved and both DELAYED_DELIVERY and DAMAGE to carrier_issue.
+
+Automated checks:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -q
+npm --prefix uis/backoffice run typecheck
+npm --prefix uis/backoffice run build
+```

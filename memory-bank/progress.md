@@ -54,9 +54,24 @@
 - Added auth API tests for account enumeration resistance, successful reset and token replay rejection, expired token rejection, and change-password current-password checks.
 - Repaired malformed supplier PATCH calls that prevented app-wide typechecking; they now use the existing authenticated fetch helper and send the expected JSON payloads.
 - Moved logout token clearing/redirect into a client effect so the auth page can be statically prerendered.
+- **Environment note**: the working `.env` lives at the repo root (where `services/api/main.py` loads it via `python-dotenv`). A local `uis/backoffice/.env.local` sets `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` for the backoffice app; both files are git-ignored.
+- **Verified fallback**: confirmed `services/api/email.py` prints the reset link to the API console instead of raising when Resend is unreachable or unconfigured; direct invocation returned without raising, and the earlier traceback (`raise EmailDeliveryError ... from exc`) no longer exists in source.
 - **Verified**: `tests/test_auth_api.py` passes (5 tests); `uis/backoffice` TypeScript typecheck passes.
 - **Verified**: `uis/backoffice` production build passes and generates the new reset/change-password routes.
 - **Setup requirement**: Configure a Resend API key and verified sender in the local `.env` or deployment environment before expecting real reset emails.
+
+## Centralized Incident Manager (CIM1-CIM3)
+
+- Implemented the model, branch labels, nine categories, three origins, and four-state lifecycle from `trackflow-BRIEFING.en.md`.
+- Extracted the analyzer's CSV validation into `packages/shared/incident_validation.py`; the analyzer retains its existing interface and 100/95/5 totals. Shared manager contracts and mappings live in `packages/shared/incidents.py`.
+- Added transactional SQLite incident persistence under `services/api/data/incidents.sqlite3`, separate from existing identity/supplier stores. A separate import ledger prevents duplicate seeds without storing CSV IDs on incidents.
+- Added `scripts/seed_incidents.py`: validates before transformation, preserves descriptions, maps dates to midnight UTC, skips invalid rows with privacy-safe messages, and supports missing-ID title/timestamp duplicate control.
+- Verified seed in isolated databases: 95 inserted / 5 invalid, followed by 95 duplicates skipped. Expected transformed totals match the briefing, including carrier_issue 45 and office branch counts 50/45.
+- Added authenticated create/list/detail/status/summary endpoints and an options endpoint for shared UI labels. Manager validation returns field-keyed JSON 400 errors; unexpected failures return a generic 500; empty storage returns zero metrics.
+- Added protected backoffice `/incidents` with an Operations Home launcher entry, registration form, highlighted required branch field, four list filters, independent loading/error/retry states, summary breakdowns, and optimistic status updates with rollback.
+- Verification: 29 incident API tests pass; the full backend suite, backoffice typecheck, and production build passed during implementation. Browser checks verified validation, creation/reset, filters/empty state, lifecycle update, failed-save rollback, list/summary failure isolation and retry, pending submission disablement, and narrow-screen layout.
+- Local storage was seeded with 95 incidents; browser verification added one carrier_issue incident at la_warehouse and advanced it to in_progress (96 total after that check). Seeding again will not remove browser-created records.
+- API setup/expected totals and browser/PR screenshot steps are documented in the API and backoffice READMEs. No embeddings or automatic alerts were added; they are outside this delivery.
 
 ## Notes
 
