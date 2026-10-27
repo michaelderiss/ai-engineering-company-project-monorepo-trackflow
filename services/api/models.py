@@ -33,6 +33,88 @@ class SupplierStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
+class Role(str, Enum):
+    ADMIN = "admin"
+    MANAGER = "manager"
+    USER = "user"
+
+
+class ProfileCreate(BaseModel):
+    display_name: str = Field(..., min_length=1)
+    phone: str | None = None
+    address: str | None = None
+
+    class Config:
+        extra = "forbid"
+
+
+class Profile(ProfileCreate):
+    id: int
+    user_id: int
+
+
+class UserBase(BaseModel):
+    email: str = Field(..., min_length=1)
+    is_active: bool = True
+    role: Role = Role.USER
+
+    @validator("email")
+    def validate_email(cls, value: str) -> str:
+        if "@" not in value or "." not in value:
+            raise ValueError("Email must be a valid address.")
+        return value
+
+    class Config:
+        extra = "forbid"
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=8)
+    profile: ProfileCreate | None = None
+
+
+class User(UserBase):
+    id: int
+    hashed_password: str
+    created_at: datetime
+    updated_at: datetime
+    profile: Profile | None = None
+
+
+class UserUpdate(BaseModel):
+    email: str | None = None
+    password: str | None = Field(default=None, min_length=8)
+    role: Role | None = None
+    is_active: bool | None = None
+    profile: ProfileCreate | None = None
+
+    class Config:
+        extra = "forbid"
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class TokenData(BaseModel):
+    user_id: int | None = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+
+
 class SupplierCreate(BaseModel):
     name: str = Field(..., min_length=1)
     country: Country

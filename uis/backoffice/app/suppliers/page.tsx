@@ -1,9 +1,44 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { API_BASE, getToken } from "../../lib/auth";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_INCIDENTS_API_BASE_URL ?? "http://localhost:8000";
+/** Add the stored Bearer token to a headers object. */
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = getToken();
+  if (token) {
+    extra["Authorization"] = `Bearer ${token}`;
+  }
+  if (!("Content-Type" in extra)) {
+    extra["Content-Type"] = "application/json";
+  }
+  return extra;
+}
+
+/** Wraps fetch with automatic token injection and 401 handling. */
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (options.headers) {
+    const incoming = options.headers as Record<string, string>;
+    for (const key of Object.keys(incoming)) {
+      headers[key] = incoming[key];
+    }
+  }
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const response = await fetch(url, { ...options, headers, cache: "no-store" });
+  if (response.status === 401) {
+    try { localStorage.removeItem("trackflow_access_token"); } catch { /* ignore */ }
+    window.location.href = "/login";
+    throw new Error("Session expired.");
+  }
+  return response;
+}
 
 const CATEGORY_OPTIONS = [
   "carrier_last_mile",
@@ -95,7 +130,7 @@ export default function SuppliersPage() {
       }
 
       const suffix = params.toString() ? `?${params.toString()}` : "";
-      const response = await fetch(`${API_BASE}/suppliers${suffix}`);
+      const response = await authFetch(`${API_BASE}/suppliers${suffix}`);
       if (!response.ok) {
         const message = await response.text();
         throw new Error(message || "Failed to load suppliers.");
@@ -170,9 +205,8 @@ export default function SuppliersPage() {
         notes: normalizeOptional(form.notes),
       };
 
-      const response = await fetch(`${API_BASE}/suppliers`, {
+      const response = await authFetch(`${API_BASE}/suppliers`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -200,9 +234,8 @@ export default function SuppliersPage() {
     }
 
     setError(null);
-    const response = await fetch(`${API_BASE}/suppliers/${supplierId}/rate`, {
+    const response = await authFetch(`${API_BASE}/suppliers/${supplierId}/rate`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rate_per_shipment: rate }),
     });
 
@@ -218,9 +251,8 @@ export default function SuppliersPage() {
   async function toggleStatus(supplier: Supplier): Promise<void> {
     setError(null);
     const nextStatus = supplier.status === "active" ? "suspended" : "active";
-    const response = await fetch(`${API_BASE}/suppliers/${supplier.id}/status`, {
+    const response = await authFetch(`${API_BASE}/suppliers/${supplier.id}/status`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     });
 

@@ -2,18 +2,43 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 
+from passlib.context import CryptContext
 from tinydb import Query, TinyDB
 from tinydb.table import Document
 
-from services.api.models import SUPPLIERS_SEED, Supplier, SupplierCreate, SupplierStatus
+from services.api.models import (
+    SUPPLIERS_SEED,
+    Profile,
+    ProfileCreate,
+    Role,
+    Supplier,
+    SupplierCreate,
+    SupplierStatus,
+    User,
+    UserCreate,
+    UserUpdate,
+)
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "suppliers.json"
+USER_DB_PATH = Path(__file__).resolve().parent / "data" / "users.json"
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_password_reset_lock = Lock()
+
+
+def get_password_hash(password: str) -> str:
+    return _pwd_context.hash(password)
 
 
 def get_db() -> TinyDB:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     return TinyDB(DB_PATH, indent=2, ensure_ascii=False)
+
+
+def get_user_db() -> TinyDB:
+    USER_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    return TinyDB(USER_DB_PATH, indent=2, ensure_ascii=False)
 
 
 def _now() -> datetime:
@@ -32,6 +57,23 @@ def _supplier_from_document(document: Document) -> Supplier:
 
 def _seed_identity(supplier: dict) -> tuple[str, str]:
     return supplier["name"], supplier["country"]
+
+
+def _profile_from_document(document: Document | None) -> Profile | None:
+    if document is None:
+        return None
+    payload = dict(document)
+    payload["id"] = document.doc_id
+    return Profile(**payload)
+
+
+def _user_from_document(document: Document | None, profile_document: Document | None = None) -> User | None:
+    if document is None:
+        return None
+    payload = dict(document)
+    payload["id"] = document.doc_id
+    payload["profile"] = _profile_from_document(profile_document)
+    return User(**payload)
 
 
 def list_suppliers(country: str | None = None, category: str | None = None) -> list[Supplier]:
@@ -116,3 +158,242 @@ def seed_suppliers() -> int:
             inserted += 1
 
     return inserted
+
+
+def list_users() -> list[User]:
+    with get_user_db() as db:
+        user_table = db.table("users")
+        profile_table = db.table("profiles")
+        query = Query()
+        users: list[User] = []
+        for document in user_table.all():
+            profile_document = profile_table.get(query.user_id == document.doc_id)
+            user = _user_from_document(document, profile_document)
+            if user is not None:
+                users.append(user)
+        return users
+
+
+def get_user_by_id(user_id: int) -> User | None:
+    with get_user_db() as db:
+        user_table = db.table("users")
+        profile_table = db.table("profiles")
+        query = Query()
+        document = user_table.get(doc_id=user_id)
+        if document is None:
+            return None
+        profile_document = profile_table.get(query.user_id == user_id)
+        return _user_from_document(document, profile_document)
+
+
+def get_user_by_email(email: str) -> User | None:
+    with get_user_db() as db:
+        user_table = db.table("users")
+        profile_table = db.table("profiles")
+        query = Query()
+        document = user_table.get(query.email == email)
+        if document is None:
+            return None
+        profile_document = profile_table.get(query.user_id == document.doc_id)
+        return _user_from_document(document, profile_document)
+
+
+def create_user(payload: UserCreate) -> User:
+    with get_user_db() as db:
+        user_table = db.table("users")
+        profile_table = db.table("profiles")
+        query = Query()
+        if user_table.get(query.email == payload.email):
+            raise ValueError("A user with this email already exists.")
+
+        created_at = _now_iso()
+        user_document = {
+            "email": payload.email,
+            "hashed_password": get_password_hash(payload.password),
+            "is_active": payload.is_active,
+            "role": payload.role.value,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+        user_id = user_table.insert(user_document)
+        profile_document: dict | None = None
+        if payload.profile is not None:
+            profile_document = {
+                "user_id": user_id,
+                "display_name": payload.profile.display_name,
+                "phone": payload.profile.phone,
+                "address": payload.profile.address,
+            }
+            profile_table.insert(profile_document)
+        stored_user = user_table.get(doc_id=user_id)
+        stored_profile = profile_table.get(query.user_id == user_id)
+        return _user_from_document(stored_user, stored_profile)
+
+
+def update_user(user_id: int, payload: UserUpdate) -> User | None:
+    with get_user_db() as db:
+        user_table = db.table("users")
+        profile_table = db.table("profiles")
+        query = Query()
+        document = user_table.get(doc_id=user_id)
+        if document is None:
+            return None
+
+        updates: dict = {"updated_at": _now_iso()}
+        if payload.email is not None:
+            updates["email"] = payload.email
+        if payload.password is not None:
+            updates["hashed_password"] = get_password_hash(payload.password)
+        if payload.role is not None:
+            updates["role"] = payload.role.value
+        if payload.is_active is not None:
+            updates["is_active"] = payload.is_active
+
+        user_table.update(updates, doc_ids=[user_id])
+
+        if payload.profile is not None:
+            existing_profile = profile_table.get(query.user_id == user_id)
+            profile_data = {
+                "user_id": user_id,
+                "display_name": payload.profile.display_name,
+                "phone": payload.profile.phone,
+                "address": payload.profile.address,
+            }
+            if existing_profile is None:
+                profile_table.insert(profile_data)
+            else:
+                profile_table.update(profile_data, doc_ids=[existing_profile.doc_id])
+
+        updated_document = user_table.get(doc_id=user_id)
+        updated_profile = profile_table.get(query.user_id == user_id)
+        return _user_from_document(updated_document, updated_profile)
+
+
+def store_password_reset_token(token_hash: str, user_id: int, expires_at: datetime) -> None:
+    with _password_reset_lock, get_user_db() as db:
+        token_table = db.table("password_reset_tokens")
+        token_table.insert(
+            {
+                "token_hash": token_hash,
+                "user_id": user_id,
+                "expires_at": expires_at.isoformat(),
+                "used_at": None,
+            }
+        )
+
+
+def consume_password_reset_token(
+    token_hash: str,
+    user_id: int,
+    new_hashed_password: str,
+) -> bool:
+    with _password_reset_lock, get_user_db() as db:
+        token_table = db.table("password_reset_tokens")
+        user_table = db.table("users")
+        query = Query()
+        token_document = token_table.get(query.token_hash == token_hash)
+        user_document = user_table.get(doc_id=user_id)
+        if token_document is None or user_document is None:
+            return False
+        if token_document.get("user_id") != user_id or token_document.get("used_at") is not None:
+            return False
+
+        expires_at = datetime.fromisoformat(token_document["expires_at"])
+        if expires_at <= datetime.now(timezone.utc):
+            return False
+
+        user_table.update(
+            {"hashed_password": new_hashed_password, "updated_at": _now_iso()},
+            doc_ids=[user_id],
+        )
+        token_table.update({"used_at": _now_iso()}, doc_ids=[token_document.doc_id])
+        return True
+
+
+def delete_user(user_id: int) -> bool:
+    with get_user_db() as db:
+        user_table = db.table("users")
+        profile_table = db.table("profiles")
+        query = Query()
+        user_document = user_table.get(doc_id=user_id)
+        if user_document is None:
+            return False
+        user_table.remove(doc_ids=[user_id])
+        profile_table.remove(query.user_id == user_id)
+        return True
+
+
+def create_profile_for_user(user_id: int, payload: ProfileCreate) -> Profile:
+    with get_user_db() as db:
+        profile_table = db.table("profiles")
+        query = Query()
+        if profile_table.get(query.user_id == user_id):
+            raise ValueError("This user already has a profile.")
+        profile_doc_id = profile_table.insert(
+            {
+                "user_id": user_id,
+                "display_name": payload.display_name,
+                "phone": payload.phone,
+                "address": payload.address,
+            }
+        )
+        document = profile_table.get(doc_id=profile_doc_id)
+        return _profile_from_document(document)
+
+
+def get_profile_for_user(user_id: int) -> Profile | None:
+    with get_user_db() as db:
+        profile_table = db.table("profiles")
+        query = Query()
+        document = profile_table.get(query.user_id == user_id)
+        return _profile_from_document(document)
+
+
+def update_profile_for_user(user_id: int, payload: ProfileCreate) -> Profile | None:
+    with get_user_db() as db:
+        profile_table = db.table("profiles")
+        query = Query()
+        document = profile_table.get(query.user_id == user_id)
+        if document is None:
+            return None
+        profile_table.update(
+            {
+                "display_name": payload.display_name,
+                "phone": payload.phone,
+                "address": payload.address,
+            },
+            doc_ids=[document.doc_id],
+        )
+        updated_document = profile_table.get(doc_id=document.doc_id)
+        return _profile_from_document(updated_document)
+
+
+def seed_users() -> int:
+    from os import getenv
+
+    email = getenv("TRACKFLOW_ADMIN_EMAIL", "admin@trackflow.com")
+    password = getenv("TRACKFLOW_ADMIN_PASSWORD", "admin123")
+    with get_user_db() as db:
+        user_table = db.table("users")
+        if user_table.get(Query().email == email):
+            return 0
+        user_id = user_table.insert(
+            {
+                "email": email,
+                "hashed_password": get_password_hash(password),
+                "is_active": True,
+                "role": Role.ADMIN.value,
+                "created_at": _now_iso(),
+                "updated_at": _now_iso(),
+            }
+        )
+        profile_table = db.table("profiles")
+        profile_table.insert(
+            {
+                "user_id": user_id,
+                "display_name": "TrackFlow Admin",
+                "phone": "+1-555-0000",
+                "address": "Los Angeles, CA",
+            }
+        )
+        return 1

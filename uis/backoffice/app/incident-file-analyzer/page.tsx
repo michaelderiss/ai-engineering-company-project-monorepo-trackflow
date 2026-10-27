@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { API_BASE, getToken } from "../../lib/auth";
 
 type AnalysisResult = {
   source_file: string;
@@ -16,9 +17,6 @@ type AnalysisResult = {
   scored_closed_incidents: number;
   closed_incidents: number;
 };
-
-const API_BASE =
-  process.env.NEXT_PUBLIC_INCIDENTS_API_BASE_URL ?? "http://localhost:8000";
 
 const invalidLabels: Record<string, string> = {
   invalid_country: "Invalid country",
@@ -37,6 +35,40 @@ function pct(value: number, total: number): string {
     return "0.0%";
   }
   return `${((value / total) * 100).toFixed(1)}%`;
+}
+
+/** Add the stored Bearer token to a headers object. */
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = getToken();
+  if (token) {
+    extra["Authorization"] = `Bearer ${token}`;
+  }
+  return extra;
+}
+
+/** Wraps fetch with automatic token injection and 401 handling. */
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (options.headers) {
+    const incoming = options.headers as Record<string, string>;
+    for (const key of Object.keys(incoming)) {
+      headers[key] = incoming[key];
+    }
+  }
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const response = await fetch(url, { ...options, headers, cache: "no-store" });
+  if (response.status === 401) {
+    try { localStorage.removeItem("trackflow_access_token"); } catch { /* ignore */ }
+    window.location.href = "/login";
+    throw new Error("Session expired.");
+  }
+  return response;
 }
 
 export default function IncidentFileAnalyzerPage() {
@@ -68,7 +100,7 @@ export default function IncidentFileAnalyzerPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`${API_BASE}/api/incidents/analyze`, {
+      const response = await authFetch(`${API_BASE}/api/incidents/analyze`, {
         method: "POST",
         body: formData,
       });
