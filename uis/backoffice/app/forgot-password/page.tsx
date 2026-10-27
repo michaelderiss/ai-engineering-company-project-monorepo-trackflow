@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { API_BASE } from "../../lib/auth";
+import { publicApiFetch } from "../../lib/auth";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -15,15 +15,12 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+      await publicApiFetch("/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
         cache: "no-store",
       });
-      if (!response.ok) {
-        throw new Error("Could not submit the request. Please try again.");
-      }
       setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not submit the request.");

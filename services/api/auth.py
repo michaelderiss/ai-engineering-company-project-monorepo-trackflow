@@ -72,7 +72,10 @@ def decode_access_token(token: str) -> TokenData:
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return TokenData(user_id=int(user_id))
+    try:
+        return TokenData(user_id=int(user_id))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"}) from exc
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:

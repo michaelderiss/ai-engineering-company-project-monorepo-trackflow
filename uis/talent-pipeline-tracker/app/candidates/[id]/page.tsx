@@ -29,6 +29,7 @@ export default function CandidateDetailPage() {
 
   const [notesLoading, setNotesLoading] = useState(true);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
 
   const [statusSaving, setStatusSaving] = useState(false);
   const [stageSaving, setStageSaving] = useState(false);
@@ -87,7 +88,7 @@ export default function CandidateDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [candidateId]);
+  }, [candidateId, loadRevision]);
 
   async function handleStatusChange(nextStatus: CandidateStatus) {
     if (!candidate) return;
@@ -169,6 +170,7 @@ export default function CandidateDetailPage() {
         <Link href="/" className="mt-4 inline-block text-sm text-slate-800 underline">
           Back to candidate list
         </Link>
+        <button type="button" className="ml-4 underline" onClick={() => setLoadRevision((value) => value + 1)}>Retry candidate</button>
       </main>
     );
   }
@@ -194,6 +196,7 @@ export default function CandidateDetailPage() {
           {feedback.message}
         </p>
       )}
+      {(statusSaving || stageSaving) && <p role="status">Saving candidate changes...</p>}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Candidate detail</h2>
@@ -284,6 +287,7 @@ export default function CandidateDetailPage() {
         error={notesError}
         onAddNote={handleAddNote}
         onDeleteNote={handleDeleteNote}
+        onRetry={() => setLoadRevision((value) => value + 1)}
       />
 
       <CandidateForm

@@ -15,7 +15,7 @@ from services.api.auth import (
     reset_user_password,
 )
 from services.api.database import get_user_by_email
-from services.api.email import send_password_reset_email
+from services.api.email import EmailDeliveryError, send_password_reset_email
 from services.api.models import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -32,8 +32,8 @@ BACKOFFICE_URL = os.getenv("BACKOFFICE_URL", "http://localhost:3000").rstrip("/"
 def _deliver_reset_email(recipient: str, reset_url: str) -> None:
     try:
         send_password_reset_email(recipient, reset_url)
-    except Exception:
-        logger.exception("Password reset delivery failed unexpectedly")
+    except (EmailDeliveryError, OSError):
+        logger.error("Password reset email delivery unavailable. Check provider configuration and connectivity.")
 
 
 @router.post("/login", response_model=Token)

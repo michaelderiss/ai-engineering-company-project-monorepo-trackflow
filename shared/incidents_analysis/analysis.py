@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
-from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +9,7 @@ from packages.shared.incident_validation import (
     clean as _clean,
     safe_int as _safe_int,
     validate_csv_row as _validate_row,
+    parse_csv_rows,
 )
 
 INVALID_REASON_ORDER = [
@@ -155,11 +154,7 @@ def analyze_incidents_rows(rows: list[dict[str, str]]) -> AnalysisResult:
 
 
 def _load_rows_from_text(csv_text: str) -> list[dict[str, str]]:
-    reader = csv.DictReader(StringIO(csv_text))
-    rows: list[dict[str, str]] = []
-    for row in reader:
-        rows.append({k: (v or "") for k, v in row.items()})
-    return rows
+    return parse_csv_rows(csv_text)
 
 
 def analyze_incidents_text(csv_text: str) -> AnalysisResult:

@@ -10,9 +10,10 @@ interface NotesPanelProps {
   error: string | null;
   onAddNote: (content: string) => Promise<void>;
   onDeleteNote: (noteId: string) => Promise<void>;
+  onRetry: () => void;
 }
 
-export function NotesPanel({ notes, isLoading, error, onAddNote, onDeleteNote }: NotesPanelProps) {
+export function NotesPanel({ notes, isLoading, error, onAddNote, onDeleteNote, onRetry }: NotesPanelProps) {
   const [content, setContent] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,7 +94,7 @@ export function NotesPanel({ notes, isLoading, error, onAddNote, onDeleteNote }:
       )}
 
       {isLoading && <p className="mt-4 text-sm text-slate-600">Loading notes...</p>}
-      {error && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && <div role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"><p>{error}</p><button type="button" onClick={onRetry}>Retry notes</button></div>}
 
       {!isLoading && !error && (
         <ul className="mt-4 space-y-2">

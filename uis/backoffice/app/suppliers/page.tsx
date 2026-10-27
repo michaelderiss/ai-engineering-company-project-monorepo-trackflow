@@ -1,44 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { API_BASE, getToken } from "../../lib/auth";
-
-/** Add the stored Bearer token to a headers object. */
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = getToken();
-  if (token) {
-    extra["Authorization"] = `Bearer ${token}`;
-  }
-  if (!("Content-Type" in extra)) {
-    extra["Content-Type"] = "application/json";
-  }
-  return extra;
-}
-
-/** Wraps fetch with automatic token injection and 401 handling. */
-async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (options.headers) {
-    const incoming = options.headers as Record<string, string>;
-    for (const key of Object.keys(incoming)) {
-      headers[key] = incoming[key];
-    }
-  }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
-  const response = await fetch(url, { ...options, headers, cache: "no-store" });
-  if (response.status === 401) {
-    try { localStorage.removeItem("trackflow_access_token"); } catch { /* ignore */ }
-    window.location.href = "/login";
-    throw new Error("Session expired.");
-  }
-  return response;
-}
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { apiFetch, isObject } from "../../lib/auth";
 
 const CATEGORY_OPTIONS = [
   "carrier_last_mile",
@@ -101,6 +64,10 @@ function normalizeOptional(value: string): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
+function validSupplier(value: unknown): boolean {
+  return isObject(value) && typeof value.id === "number" && typeof value.name === "string" && typeof value.rate_per_shipment === "number" && ["country", "currency", "status", "updated_at"].every((field) => typeof value[field] === "string") && Array.isArray(value.categories) && value.categories.every((item) => typeof item === "string") && ["service_zone", "notes", "contact_email"].every((field) => value[field] == null || typeof value[field] === "string");
+}
+
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [countryFilter, setCountryFilter] = useState<string>("");
@@ -111,12 +78,16 @@ export default function SuppliersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const loadVersion = useRef(0);
 
   useEffect(() => {
     void loadSuppliers();
   }, [countryFilter, categoryFilter]);
 
   async function loadSuppliers(): Promise<void> {
+    const version = ++loadVersion.current;
     setLoading(true);
     setError(null);
 
@@ -130,22 +101,17 @@ export default function SuppliersPage() {
       }
 
       const suffix = params.toString() ? `?${params.toString()}` : "";
-      const response = await authFetch(`${API_BASE}/suppliers${suffix}`);
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to load suppliers.");
-      }
-
-      const data = (await response.json()) as Supplier[];
+      const data = await apiFetch<Supplier[]>(`/suppliers${suffix}`, {}, (value) => Array.isArray(value) && value.every(validSupplier));
+      if (version !== loadVersion.current) return;
       setSuppliers(data);
       setRateDrafts(
         Object.fromEntries(data.map((supplier) => [supplier.id, supplier.rate_per_shipment.toString()])),
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error.";
-      setError(message);
+      if (version === loadVersion.current) setError(message);
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }
 
@@ -191,6 +157,7 @@ export default function SuppliersPage() {
 
     setSubmitting(true);
     setFormError(null);
+    setFeedback("");
 
     try {
       const payload = {
@@ -205,17 +172,13 @@ export default function SuppliersPage() {
         notes: normalizeOptional(form.notes),
       };
 
-      const response = await authFetch(`${API_BASE}/suppliers`, {
+      await apiFetch<Supplier>("/suppliers", {
         method: "POST",
         body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Failed to create supplier.");
-      }
+      }, validSupplier);
 
       setForm(EMPTY_FORM);
+      setFeedback("Supplier registered successfully.");
       await loadSuppliers();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error.";
@@ -226,6 +189,7 @@ export default function SuppliersPage() {
   }
 
   async function updateRate(supplierId: number): Promise<void> {
+    if (savingId !== null) return;
     const draft = rateDrafts[supplierId] ?? "";
     const rate = Number(draft);
     if (!Number.isFinite(rate) || rate <= 0) {
@@ -234,35 +198,34 @@ export default function SuppliersPage() {
     }
 
     setError(null);
-    const response = await authFetch(`${API_BASE}/suppliers/${supplierId}/rate`, {
-      method: "PATCH",
-      body: JSON.stringify({ rate_per_shipment: rate }),
-    });
-
-    if (!response.ok) {
-      const message = await response.text();
-      setError(message || "Failed to update supplier rate.");
-      return;
+    setFeedback("");
+    setSavingId(supplierId);
+    try {
+      await apiFetch(`/suppliers/${supplierId}/rate`, { method: "PATCH", body: JSON.stringify({ rate_per_shipment: rate }) }, validSupplier);
+      setFeedback("Supplier rate updated.");
+      await loadSuppliers();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save the rate. Please try again.");
+    } finally {
+      setSavingId(null);
     }
-
-    await loadSuppliers();
   }
 
   async function toggleStatus(supplier: Supplier): Promise<void> {
+    if (savingId !== null) return;
     setError(null);
+    setFeedback("");
     const nextStatus = supplier.status === "active" ? "suspended" : "active";
-    const response = await authFetch(`${API_BASE}/suppliers/${supplier.id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: nextStatus }),
-    });
-
-    if (!response.ok) {
-      const message = await response.text();
-      setError(message || "Failed to update supplier status.");
-      return;
+    setSavingId(supplier.id);
+    try {
+      await apiFetch(`/suppliers/${supplier.id}/status`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) }, validSupplier);
+      setFeedback("Supplier status updated.");
+      await loadSuppliers();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not update the status. Please try again.");
+    } finally {
+      setSavingId(null);
     }
-
-    await loadSuppliers();
   }
 
   return (
@@ -311,7 +274,8 @@ export default function SuppliersPage() {
             </select>
           </label>
         </div>
-        {error && <p className="error">{error}</p>}
+        {error && <div role="alert"><p className="error">{error}</p><button type="button" disabled={loading} onClick={() => void loadSuppliers()}>Retry loading suppliers</button></div>}
+        {feedback && <p role="status" className="success">{feedback}</p>}
       </section>
 
       <section className="panel">
@@ -472,6 +436,7 @@ export default function SuppliersPage() {
             </tr>
           </thead>
           <tbody>
+            {!loading && !error && suppliers.length === 0 && <tr><td colSpan={7}>No suppliers match the current filters.</td></tr>}
             {suppliers.map((supplier) => (
               <tr key={supplier.id}>
                 <td>
@@ -508,10 +473,10 @@ export default function SuppliersPage() {
                 <td>{new Date(supplier.updated_at).toLocaleString()}</td>
                 <td>
                   <div className="table-actions">
-                    <button type="button" onClick={() => void updateRate(supplier.id)}>
-                      Update rate
+                    <button type="button" disabled={savingId !== null || loading} onClick={() => void updateRate(supplier.id)}>
+                      {savingId === supplier.id ? "Saving..." : "Update rate"}
                     </button>
-                    <button type="button" onClick={() => void toggleStatus(supplier)}>
+                    <button type="button" disabled={savingId !== null || loading} onClick={() => void toggleStatus(supplier)}>
                       {supplier.status === "active" ? "Suspend" : "Reactivate"}
                     </button>
                   </div>

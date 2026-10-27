@@ -144,6 +144,15 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - Historical seed is explicit (`python scripts/seed_incidents.py`), never an automatic startup import. Expected seed-only totals are 95 incidents, statuses 29 open/52 resolved/14 discarded, categories 14 lost_parcel/45 carrier_issue/19 delivery_failure/17 returns_issue, and branches 50 la_office/45 zaragoza_office.
 - Tests in `tests/test_incidents_api.py` isolate persistence using temporary databases. Browser failure checks use intercepted responses rather than disrupting the user's running API. Setup and manual verification live in existing app/API READMEs.
 
+### 10. Cross-Cutting Error Handling
+
+- `packages/shared/http.ts` is the shared TypeScript request boundary: 15-second default timeout, safe status mapping, controlled field errors, guarded JSON parsing, and optional domain validators. Backoffice auth/CIM/supplier/analyzer clients and tracker requests use it; raw response bodies and native fetch/parser messages are not shown in the UI.
+- Backoffice now separates profile 404 from load failure, exposes supplier mutation/recovery states, and downloads CSV via authenticated fetch with object-URL cleanup. Tracker read failures have retry controls. All Next.js apps have route error/loading components.
+- FastAPI errors are consistently JSON, preserve HTTP auth headers, and expose field errors without echoing invalid inputs. CIM uses 400 validation responses, other schema validation 422; unexpected failures return generic 500. The global handler logs exception type rather than sensitive payloads. Failed startup storage reports health 503 without leaking details.
+- CSV header/row-width validation is shared in `packages/shared/incident_validation.py`. Seed/analyzer scripts catch specific file, encoding, parse and storage errors; the Git memory guard fails closed on subprocess failure. CLI diagnostics go to stderr with nonzero critical exits.
+- Reset console delivery is disabled unless `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true`; enable only for local development. This supersedes older notes describing an automatic fallback. Default provider failures expose no reset links or recipients in logs.
+- Auth regression tests now isolate TinyDB storage. `tests/test_error_handling.py` and `tests/http-errors.test.cjs` cover safe failure contracts; see `docs/ERROR_HANDLING.md` for audit evidence and browser/CLI checks. Tracker's Next.js bundler root includes the repository so shared TypeScript imports compile.
+
 ## Feedback-related status
 
 - Website section parity issue: resolved in `uis/website`.

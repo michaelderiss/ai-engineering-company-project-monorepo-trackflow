@@ -31,12 +31,10 @@ npm install
 npm run dev
 ```
 
-`npm run dev` and `npm run build` automatically run `npm run milestone2:sync` first.
-
-To sync a specific shipment from the testing-interface dataset:
+If the dispatch screen reports unavailable output, regenerate it from the repository root:
 
 ```bash
-npm run milestone2:sync -- --shipment=SH-2024-9001
+node scripts/generate_milestone2_output.cjs --shipment=SH-2024-9001
 ```
 
 Open `http://localhost:3000`.
@@ -83,3 +81,7 @@ Automated checks:
 npm --prefix uis/backoffice run typecheck
 npm --prefix uis/backoffice run build
 ```
+
+## Error-Handling Verification
+
+See `docs/ERROR_HANDLING.md` for offline, server-error, malformed-response, loading/retry, and script failure checks. The frontend uses shared request timeouts and safe error messages. Supplier mutations show pending/success/error feedback; CSV export now downloads with the bearer token instead of opening an unauthenticated tab. Profile loading offers retry for failures and treats only 404 as a missing profile.

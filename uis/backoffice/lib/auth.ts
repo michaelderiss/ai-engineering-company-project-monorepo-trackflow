@@ -1,3 +1,6 @@
+import { RequestError, requestJson, requestResponse } from "../../../packages/shared/http";
+export { RequestError, isObject } from "../../../packages/shared/http";
+
 const AUTH_TOKEN_KEY = "trackflow_access_token";
 
 export const API_BASE =
@@ -15,7 +18,7 @@ export function setToken(token: string): void {
   try {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
   } catch {
-    // localStorage unavailable — ignore
+    throw new Error("Your browser could not save the session. Allow site storage and try signing in again.");
   }
 }
 
@@ -43,72 +46,31 @@ export function redirectToHome(): void {
  * Perform a fetch against the TrackFlow API, automatically attaching the
  * stored Bearer token and handling 401 responses.
  */
-export async function apiFetch<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
+function authenticatedOptions(options: RequestInit): RequestInit {
+  const headers = new Headers(options.headers);
   const token = getToken();
-  const headers: Record<string, string> = {};
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return { ...options, headers };
+}
 
-  // Copy caller-supplied headers
-  if (options.headers) {
-    const incoming = options.headers as Record<string, string>;
-    for (const key of Object.keys(incoming)) {
-      headers[key] = incoming[key];
-    }
-  }
-
-  // Attach auth token
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  // Set Content-Type unless body is FormData (browser sets it automatically)
-  if (
-    !(options.body instanceof FormData) &&
-    !headers["Content-Type"]
-  ) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-    cache: "no-store",
-  });
-
-  // Handle 401 — session expired or invalid
-  if (response.status === 401) {
+function handleAuthError(error: unknown): never {
+  if (error instanceof RequestError && error.status === 401) {
     clearToken();
     redirectToLogin();
-    throw new Error("Session expired. Redirecting to login.");
   }
+  throw error;
+}
 
-  // Parse error responses
-  if (!response.ok) {
-    let message: string;
-    try {
-      const errorBody = await response.json();
-      if (typeof errorBody?.detail === "string") {
-        message = errorBody.detail;
-      } else if (Array.isArray(errorBody?.detail)) {
-        message = errorBody.detail
-          .map((item: { msg?: string }) => item.msg)
-          .filter(Boolean)
-          .join(". ");
-      } else {
-        message = `Request failed with status ${response.status}`;
-      }
-    } catch {
-      message = `Request failed with status ${response.status}`;
-    }
-    throw new Error(message);
-  }
+export async function apiFetch<T>(path: string, options: RequestInit = {}, validate?: (value: unknown) => boolean): Promise<T> {
+  try { return await requestJson<T>(`${API_BASE}${path}`, authenticatedOptions(options), validate); }
+  catch (error) { return handleAuthError(error); }
+}
 
-  // 204 No Content
-  if (response.status === 204) {
-    return null as T;
-  }
+export async function apiResponse(path: string, options: RequestInit = {}): Promise<Response> {
+  try { return await requestResponse(`${API_BASE}${path}`, authenticatedOptions(options)); }
+  catch (error) { return handleAuthError(error); }
+}
 
-  return (await response.json()) as T;
+export function publicApiFetch<T>(path: string, options: RequestInit = {}, validate?: (value: unknown) => boolean): Promise<T> {
+  return requestJson<T>(`${API_BASE}${path}`, options, validate);
 }

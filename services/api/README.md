@@ -4,7 +4,7 @@ The password recovery flow sends reset links through Resend. Copy the root `.env
 
 The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` defaults to 30, and `BACKOFFICE_URL` defaults to `http://localhost:3000`; the generated reset link points to the backoffice app. `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` configures the backoffice API address.
 
-For local development, Resend delivery failures (missing config, blocked network, rejected sender) automatically fall back to printing the reset link in the API console. This keeps the forgot/reset flow usable without a reachable email provider; real mail delivery still requires a verified Resend sender.
+Reset links and recipient addresses are not printed by default. For local development only, explicitly set `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in the root `.env` to print a usable reset link when Resend is unavailable. Restart the API after changing the setting. Never enable this in production or shared logs; console links are credentials. Real email still requires a valid Resend key and sender.
 
 Run the API from the repository root with:
 
@@ -53,3 +53,11 @@ For a database containing only the historical seed, expected totals are:
 ```
 
 The incident tests use isolated temporary databases, including seed idempotency, exact transformed counts, field errors, all status transitions, empty results, authentication, and generic failure handling. Do not delete the live database to run these tests.
+
+## Error Handling
+
+All handled API errors now return JSON with `message`, a compatibility `detail`, and optional field-keyed `errors`. Required auth headers are preserved. CIM validation retains status 400; other model validation uses 422. Missing resources use 404, permission failures 403, authentication failures 401, and unexpected failures a generic 500. Unavailable startup storage is logged safely and reported as 503 by `/health`.
+
+Internal exception text, request passwords, connection details, and reset tokens are never included in normal error responses. CSV structure is validated before processing. Database conflicts have a dedicated exception type so corrupt storage is not mistaken for an input conflict.
+
+See `docs/ERROR_HANDLING.md` for the audit, browser checks, and automated verification commands.

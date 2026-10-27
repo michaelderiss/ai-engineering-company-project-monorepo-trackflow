@@ -28,11 +28,15 @@ def _log_reset_link_fallback(recipient: str, reset_url: str) -> None:
 def send_password_reset_email(recipient: str, reset_url: str) -> None:
     api_key = os.getenv("RESEND_API_KEY")
     sender = os.getenv("RESEND_FROM_EMAIL")
-    expiry_minutes = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30"))
+    try:
+        expiry_minutes = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30"))
+    except ValueError as exc:
+        raise EmailDeliveryError("Email configuration is invalid.") from exc
     if not api_key or not sender:
-        logger.warning("Resend email configuration missing; using console fallback for %s", recipient)
-        _log_reset_link_fallback(recipient, reset_url)
-        return
+        if os.getenv("ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK", "").lower() == "true":
+            _log_reset_link_fallback(recipient, reset_url)
+            return
+        raise EmailDeliveryError("Email delivery is not configured.")
 
     payload = json.dumps(
         {
@@ -52,6 +56,7 @@ def send_password_reset_email(recipient: str, reset_url: str) -> None:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "TrackFlow/1.0",
         },
         method="POST",
     )
@@ -61,9 +66,8 @@ def send_password_reset_email(recipient: str, reset_url: str) -> None:
             if response.status >= 300:
                 raise EmailDeliveryError("Resend rejected the email request.")
     except (HTTPError, URLError, TimeoutError, EmailDeliveryError) as exc:
-        logger.warning(
-            "Resend delivery failed (%s); using console fallback for %s",
-            exc,
-            recipient,
-        )
-        _log_reset_link_fallback(recipient, reset_url)
+        if os.getenv("ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK", "").lower() == "true":
+            logger.warning("Email delivery unavailable; using explicitly enabled development console delivery")
+            _log_reset_link_fallback(recipient, reset_url)
+            return
+        raise EmailDeliveryError("Could not deliver the password reset email.") from exc

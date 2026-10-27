@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { apiFetch, setToken, redirectToHome } from "../../lib/auth";
+import { publicApiFetch, isObject, setToken, redirectToHome } from "../../lib/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -28,30 +28,15 @@ export default function LoginPage() {
       body.set("username", email);
       body.set("password", password);
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_INCIDENTS_API_BASE_URL ?? "http://localhost:8000"}/auth/login`,
+      const data = await publicApiFetch<{ access_token: string }>(
+        "/auth/login",
         {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: body.toString(),
           cache: "no-store",
-        },
+        }, (value) => isObject(value) && typeof value.access_token === "string" && value.access_token.length > 0,
       );
-
-      if (!response.ok) {
-        let message: string;
-        try {
-          const errorBody = await response.json();
-          message = typeof errorBody?.detail === "string"
-            ? errorBody.detail
-            : `Login failed with status ${response.status}`;
-        } catch {
-          message = `Login failed with status ${response.status}`;
-        }
-        throw new Error(message);
-      }
-
-      const data = (await response.json()) as { access_token: string };
       setToken(data.access_token);
       redirectToHome();
     } catch (err) {

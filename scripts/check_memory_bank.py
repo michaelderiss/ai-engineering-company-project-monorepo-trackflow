@@ -21,16 +21,23 @@ ALLOWED_WORKFLOW_FILES = {
 }
 
 
+class GitInspectionError(RuntimeError):
+    pass
+
+
 def git_output(*args: str) -> str:
     repo_root = Path(__file__).resolve().parent.parent
-    result = subprocess.run(
-        ["git", "-C", str(repo_root), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise GitInspectionError("Could not run Git. Check that Git is installed and retry.") from exc
     if result.returncode != 0:
-        return ""
+        raise GitInspectionError("Could not inspect repository changes. Check the Git repository and retry.")
     return result.stdout.strip()
 
 
@@ -46,7 +53,11 @@ def changed_files(mode: str) -> list[str]:
 
 def main() -> int:
     mode = "cached" if "--cached" in sys.argv[1:] else "working-tree"
-    files = changed_files(mode)
+    try:
+        files = changed_files(mode)
+    except GitInspectionError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     if not files:
         return 0
@@ -64,9 +75,9 @@ def main() -> int:
     print(
         "TrackFlow memory-bank guard failed: project changes were detected without a matching update to "
         "memory-bank/progress.md, memory-bank/projectbrief.md, or memory-bank/techContext.md.\n"
-        "Changed files:\n- " + "\n- ".join(non_memory_files)
+        "Changed files:\n- " + "\n- ".join(non_memory_files), file=sys.stderr
     )
-    print("\nRequired action: update the memory bank before finalizing this change.")
+    print("\nRequired action: update the memory bank before finalizing this change.", file=sys.stderr)
     return 1
 
 

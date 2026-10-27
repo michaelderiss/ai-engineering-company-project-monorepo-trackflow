@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { apiFetch, getToken } from "../../../lib/auth";
+import { apiFetch, RequestError, isObject } from "../../../lib/auth";
 
 type Profile = {
   id: number;
@@ -21,6 +21,10 @@ type User = {
   profile: Profile | null;
 };
 
+function validProfile(value: unknown): boolean {
+  return isObject(value) && typeof value.id === "number" && typeof value.display_name === "string" && ["phone", "address"].every((field) => value[field] == null || typeof value[field] === "string");
+}
+
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +39,7 @@ export default function ProfilePage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
 
   useEffect(() => {
     let ignore = false;
@@ -44,7 +49,7 @@ export default function ProfilePage() {
       setError(null);
 
       try {
-        const userData = await apiFetch<User>("/auth/me");
+        const userData = await apiFetch<User>("/auth/me", {}, (value) => isObject(value) && typeof value.email === "string" && typeof value.role === "string" && typeof value.created_at === "string" && (value.profile == null || validProfile(value.profile)));
         if (ignore) return;
         setUser(userData);
 
@@ -57,14 +62,14 @@ export default function ProfilePage() {
         } else {
           // Try loading the profile separately
           try {
-            const profileData = await apiFetch<Profile>("/profiles/me");
+            const profileData = await apiFetch<Profile>("/profiles/me", {}, validProfile);
             if (ignore) return;
             setProfile(profileData);
             setDisplayName(profileData.display_name);
             setPhone(profileData.phone ?? "");
             setAddress(profileData.address ?? "");
-          } catch {
-            // No profile yet — that's fine, the form allows creating one
+          } catch (error) {
+            if (!(error instanceof RequestError && error.status === 404)) throw error;
           }
         }
       } catch (err) {
@@ -84,7 +89,7 @@ export default function ProfilePage() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [loadRevision]);
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,7 +106,7 @@ export default function ProfilePage() {
           phone: phone.trim() || null,
           address: address.trim() || null,
         }),
-      });
+      }, validProfile);
 
       setProfile(updated);
       setSaveSuccess(true);
@@ -135,6 +140,7 @@ export default function ProfilePage() {
         <h1>My Profile</h1>
         <section className="panel">
           <p className="error">{error}</p>
+          <button type="button" onClick={() => setLoadRevision((value) => value + 1)}>Retry profile</button>
           <a href="/" className="launcher-link">Back to home</a>
         </section>
       </main>
