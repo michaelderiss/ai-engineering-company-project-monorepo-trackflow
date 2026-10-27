@@ -276,3 +276,34 @@ nav.top-nav .nav-link {
 nav.top-nav .nav-link:hover {
   background: rgba(255,255,255,0.15);
 }
+
+.incident-manager { max-width: 1200px; }
+.incident-manager h1 { font-size: 1.8rem; }
+.incident-manager h2 { font-size: 1.3rem; }
+.incident-manager h3 { font-size: 1rem; }
+.incident-nav { display: flex; flex-wrap: wrap; gap: 1.25rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.incident-nav a { color: var(--accent); }
+.incident-section { padding: 1.5rem 0; border-bottom: 1px solid var(--line); scroll-margin-top: 1rem; }
+.incident-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 1rem; }
+.incident-manager label { display: block; min-width: 0; }
+.incident-manager .selector, .incident-manager .text-input { min-height: 44px; font: inherit; }
+.incident-manager textarea { resize: vertical; }
+.incident-manager .form-grid, .incident-manager .filter-grid { grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.incident-manager button { min-height: 44px; }
+.incident-manager [aria-invalid="true"] { border: 2px solid #b42318; }
+.field-error { display: block; margin-top: 0.4rem; font-size: 0.9rem; }
+.incident-branch-highlight { background: #e5efff; border-left: 4px solid var(--accent); padding: 0.65rem; }
+.incident-table-scroll { width: 100%; overflow-x: auto; }
+.incident-table { min-width: 760px; table-layout: fixed; }
+.incident-table th:first-child { width: 30%; }
+.incident-table td { vertical-align: top; overflow-wrap: anywhere; }
+.incident-table details { margin-top: 0.6rem; }
+.incident-table summary { cursor: pointer; color: var(--accent); }
+.incident-table select { min-width: 0; }
+.incident-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 1.5rem; }
+.incident-summary-grid dl { margin: 0; }
+.incident-summary-grid dl > div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); padding: 0.65rem 0; }
+.incident-summary-grid dt { overflow-wrap: anywhere; }
+.incident-summary-grid dd { margin: 0; font-weight: 700; }
+.incident-total { font-size: 1.15rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

@@ -6,19 +6,12 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
-VALID_COUNTRIES = {"US", "ES"}
-VALID_CARRIERS_BY_COUNTRY = {
-    "US": {"UPS", "FEDEX", "DHL_US"},
-    "ES": {"MRW", "SEUR", "DHL_ES", "LOCAL_ES"},
-}
-VALID_CATEGORIES = [
-    "LOST_PARCEL",
-    "DELAYED_DELIVERY",
-    "WRONG_ADDRESS",
-    "RETURN_REQUEST",
-    "DAMAGE",
-]
-VALID_STATUS = ["OPEN", "CLOSED", "DISCARDED"]
+from packages.shared.incident_validation import (
+    VALID_CATEGORIES,
+    clean as _clean,
+    safe_int as _safe_int,
+    validate_csv_row as _validate_row,
+)
 
 INVALID_REASON_ORDER = [
     "invalid_country",
@@ -84,68 +77,6 @@ class AnalysisResult:
             "scored_closed_incidents": self.scored_closed_incidents,
             "closed_incidents": self.closed_incidents,
         }
-
-
-def _clean(value: str | None) -> str:
-    if value is None:
-        return ""
-    return value.strip()
-
-
-def _safe_int(value: str | None) -> int | None:
-    raw = _clean(value)
-    if raw == "":
-        return None
-    try:
-        return int(raw)
-    except ValueError:
-        return None
-
-
-def _validate_row(row: dict[str, str]) -> list[str]:
-    reasons: list[str] = []
-
-    country = _clean(row.get("country"))
-    carrier = _clean(row.get("carrier"))
-    tracking_number = _clean(row.get("tracking_number"))
-    category = _clean(row.get("category"))
-    description = _clean(row.get("description"))
-    status = _clean(row.get("status"))
-    customer_email = _clean(row.get("customer_email"))
-    satisfaction_score = _safe_int(row.get("satisfaction_score"))
-
-    if country not in VALID_COUNTRIES:
-        reasons.append("invalid_country")
-
-    if carrier == "":
-        reasons.append("invalid_carrier")
-    elif country in VALID_COUNTRIES and carrier not in VALID_CARRIERS_BY_COUNTRY[country]:
-        reasons.append("invalid_carrier")
-    elif country not in VALID_COUNTRIES:
-        reasons.append("invalid_carrier")
-
-    if len(tracking_number) < 8:
-        reasons.append("invalid_tracking_number")
-
-    if category not in VALID_CATEGORIES:
-        reasons.append("invalid_category")
-
-    if len(description) < 5:
-        reasons.append("invalid_description")
-
-    if "@" not in customer_email:
-        reasons.append("invalid_email")
-
-    if status not in VALID_STATUS:
-        reasons.append("invalid_status")
-
-    if status == "CLOSED" and satisfaction_score is None:
-        reasons.append("closed_without_score")
-
-    if satisfaction_score is not None and not (1 <= satisfaction_score <= 5):
-        reasons.append("invalid_score_range")
-
-    return reasons
 
 
 def _base_counters() -> tuple[dict[str, int], dict[str, int], dict[str, int], dict[int, int]]:

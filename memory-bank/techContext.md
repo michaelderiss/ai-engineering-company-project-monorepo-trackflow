@@ -77,7 +77,7 @@ Implication:
 
 ### 5. Shared package
 
-`packages/shared` still provides minimal placeholder shared types (`Id`, `BaseEntity`) and has not yet absorbed Milestone 2 domain models.
+`packages/shared` retains placeholder TypeScript types (`Id`, `BaseEntity`) and now also owns Python incident CSV validation and manager contracts/mappings. Milestone 2 TypeScript domain models remain in `src/`.
 
 ### 6. Auth/API service layer
 
@@ -132,6 +132,17 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - Backoffice routes: `/forgot-password` and `/reset-password` are public; `/account/change-password` remains behind the existing auth guard. Login and profile pages link to the respective workflows.
 - Root `.env.example` documents required settings; `.gitignore` excludes `.env` and other local env files while permitting examples. `services/api/README.md` documents Resend setup and API startup.
 - TinyDB reset-token consumption is serialized within one API process. For multi-worker production deployments, move identity/token persistence to a transactional database to guarantee race-free one-time consumption across processes.
+
+### 9. Centralized Incident Manager (CIM1-CIM3)
+
+- Business contract: `trackflow-BRIEFING.en.md`. Shared CSV rules are in `packages/shared/incident_validation.py`; manager Pydantic contracts, allowed values, display labels, transformations, and lifecycle transitions are in `packages/shared/incidents.py`.
+- `shared/incidents_analysis/analysis.py` imports the extracted validator, preserving analyzer behavior. `scripts/seed_incidents.py` reuses it before mapping valid CSV rows to customer incidents; date/title/branch/category/status mapping matches the briefing.
+- `services/api/incidents.py` uses standard-library SQLite with database CHECK constraints, parameterized queries, transactional status changes, and a separate unique import ledger. Storage: git-ignored `services/api/data/incidents.sqlite3`. No new dependencies; auth/suppliers remain TinyDB-backed.
+- `services/api/routes/incidents.py` exposes bearer-protected POST/GET `/api/incidents`, GET detail, PATCH status, GET summary, and GET options. Static analyzer routes remain registered before the detail route. Options supply the frontend's labels and valid next statuses, avoiding duplicate frontend enums.
+- The API returns scoped JSON 400 field errors for manager validation, 404 for missing records, and generic JSON 500 responses for unexpected errors. Read endpoints support empty storage. Summary is global, independent of list filters, with zeros for every allowed value.
+- `/incidents` is a protected backoffice page with form, list, filters, and summary sections. `uis/backoffice/lib/incidents.ts` provides a timeout-aware authenticated API client and typed field errors. The page isolates request states, preserves form input on failure, and rolls optimistic status changes back if the update fails.
+- Historical seed is explicit (`python scripts/seed_incidents.py`), never an automatic startup import. Expected seed-only totals are 95 incidents, statuses 29 open/52 resolved/14 discarded, categories 14 lost_parcel/45 carrier_issue/19 delivery_failure/17 returns_issue, and branches 50 la_office/45 zaragoza_office.
+- Tests in `tests/test_incidents_api.py` isolate persistence using temporary databases. Browser failure checks use intercepted responses rather than disrupting the user's running API. Setup and manual verification live in existing app/API READMEs.
 
 ## Feedback-related status
 
