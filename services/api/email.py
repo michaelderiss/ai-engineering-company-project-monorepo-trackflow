@@ -60,5 +60,10 @@ def send_password_reset_email(recipient: str, reset_url: str) -> None:
         with urlopen(request, timeout=10) as response:
             if response.status >= 300:
                 raise EmailDeliveryError("Resend rejected the email request.")
-    except (HTTPError, URLError, TimeoutError) as exc:
-        raise EmailDeliveryError("Could not deliver the password reset email.") from exc
+    except (HTTPError, URLError, TimeoutError, EmailDeliveryError) as exc:
+        logger.warning(
+            "Resend delivery failed (%s); using console fallback for %s",
+            exc,
+            recipient,
+        )
+        _log_reset_link_fallback(recipient, reset_url)

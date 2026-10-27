@@ -54,6 +54,8 @@
 - Added auth API tests for account enumeration resistance, successful reset and token replay rejection, expired token rejection, and change-password current-password checks.
 - Repaired malformed supplier PATCH calls that prevented app-wide typechecking; they now use the existing authenticated fetch helper and send the expected JSON payloads.
 - Moved logout token clearing/redirect into a client effect so the auth page can be statically prerendered.
+- **Environment note**: the working `.env` lives at the repo root (where `services/api/main.py` loads it via `python-dotenv`). A local `uis/backoffice/.env.local` sets `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` for the backoffice app; both files are git-ignored.
+- **Verified fallback**: confirmed `services/api/email.py` prints the reset link to the API console instead of raising when Resend is unreachable or unconfigured; direct invocation returned without raising, and the earlier traceback (`raise EmailDeliveryError ... from exc`) no longer exists in source.
 - **Verified**: `tests/test_auth_api.py` passes (5 tests); `uis/backoffice` TypeScript typecheck passes.
 - **Verified**: `uis/backoffice` production build passes and generates the new reset/change-password routes.
 - **Setup requirement**: Configure a Resend API key and verified sender in the local `.env` or deployment environment before expecting real reset emails.
