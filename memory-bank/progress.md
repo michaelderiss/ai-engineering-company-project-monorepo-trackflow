@@ -33,8 +33,19 @@
   **94%**, `routes/inventory.py` is **92%**, and `inventory_database.py` is
   **97%**. The project `.venv` could not be used because it is a broken/shared
   `lib64` symlink, so validation ran in a disposable environment under the OS
-  temp directory. A real Supabase connection/schema initialization was not
-  attempted to avoid writing to the user's database.
+  temp directory.
+- Live Supabase verification subsequently succeeded: API startup created/used
+  inventory tables and seeded data; GET returned six SKUs with expected stock.
+  An authenticated smoke test used a random temporary TinyDB account and a
+  unique SKU to verify inbound/outbound creation, stock recomputation, oversell
+  400, missing dispatch tracking 422, and order listing. The temporary account,
+  SKU, and movements were removed; seeded stock remained unchanged. The local
+  API was stopped after verification.
+- Existing TinyDB admin password is stored as a hash and is not reset when
+  `seed_users()` finds the admin email. `TRACKFLOW_ADMIN_PASSWORD` only applies
+  on first-time seed; do not record credentials or password hashes in project
+  memory. Use the current admin credential or a temporary account for local
+  authenticated smoke tests.
 - Setup and endpoint behavior are documented in `services/api/README.md`; the
   canonical schema and seed data are in `trackflowcompany-BRIEFING.en.md`.
 

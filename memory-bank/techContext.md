@@ -224,8 +224,18 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - `tests/conftest.py` swaps the production engine for a disposable SQLite engine
   per test and disposes it at teardown. `tests/test_inventory_api.py` covers all
   routes and critical constraints. Last full run: **167 passed**, 94% total API
-  coverage; inventory routes 92%, inventory database 97%. Tests did not attempt
-  a live Supabase connection; only presence of `DATABASE_URL` was verified.
+  coverage; inventory routes 92%, inventory database 97%.
+- Live Supabase smoke verification passed after startup: six SKUs were listed
+  with expected per-warehouse stock, authenticated create/inbound/dispatch flows
+  worked, oversell returned 400, and missing dispatch tracking returned 422.
+  A random temporary account and uniquely named test SKU/movements were removed
+  after verification; seeded stock was unchanged. Do not retain the API server
+  between work sessions unless actively testing.
+- TinyDB already contained an admin account whose password hash did not match
+  the initial default. `seed_users()` intentionally skips existing admin
+  records, so changing `TRACKFLOW_ADMIN_PASSWORD` does not reset that password.
+  Never store credentials or password hashes in memory; use the current local
+  admin credential or a temporary account for future write smoke tests.
 - Setup and route access rules are documented in `services/api/README.md`.
 
 ## Feedback-related status
