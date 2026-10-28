@@ -2,6 +2,47 @@
 
 ## Completed
 
+## AUTH-088 — Authentication test suite (with API-042 and FE-019)
+
+- Closed **AUTH-088** (unit test coverage for the authentication API). Every auth
+  endpoint/function gets at least one happy-path, one edge-case, and one
+  failure-mode test. Tests assert business logic — not HTTP serialisation.
+- Backend suite: **152 pytest tests pass** (`uv run pytest` from repo root).
+  Coverage targets met: `services/api/auth.py` **100%**, `routes/auth.py` **100%**,
+  overall `services.api` **93%**. Auth tests: 51 (token helpers, password
+  helpers, endpoint-level).
+- Test files added: `tests/test_auth_token.py` (9), `tests/test_auth_password.py`
+  (13), `tests/test_auth_endpoints.py` (24). The endpoint suite replaces the old
+  `test_auth_api.py` scope and also covers forgot/reset/change password flows.
+- Closed **API-042** (extra): backoffice endpoint tests for users, profiles,
+  suppliers — 56 tests. Coverage: users **96%**, profiles **93%**, suppliers **100%**
+  (target ≥60% each).
+- Closed **FE-019** (extra): Jest tests for frontend utility functions — 25 tests
+  in 3 suites (`auth-utils`, `http-client`, `incidents-utils`). Coverage:
+  `packages/shared/http.ts` **85.45%**, `lib/auth.ts` **79.54%**, `lib/incidents.ts`
+  **100%**.
+- Key infrastructure: pytest configured in root `pyproject.toml`
+  (`pythonpath=["."]`, `testpaths=["tests"]`, `addopts = "--cov --cov-report=term-missing"`,
+  coverage `source=["services.api"]`, omit `services/api/data/*`). Dev deps:
+  `httpx<0.28` (pin required — 0.28.1 broke starlette TestClient), pytest>=9.2.0,
+  pytest-cov>=7.1.0, freezegun>=1.5.0.
+- Key infrastructure (FE-019): Jest 30 + ts-jest at `uis/backoffice`. `jest.config.ts`
+  uses `rootDir = "../.."` (monorepo root) so `packages/shared/http.ts` is compiled
+  by ts-jest and attributed to coverage; transform points at the explicit
+  `<rootDir>/uis/backoffice/node_modules/ts-jest` path. Run with
+  `npx jest --coverage` from `uis/backoffice`.
+- AI-assisted findings documented in `TESTING.md`: purpose-scoped reset tokens,
+  import-time expiry constant + frozen-clock testing, non-integer `sub`, inactive
+  users rejected on both login and `/me`, and the **empty-string `jti`** insight
+  (it is the only input that reaches the app's own reset-token guard — non-string
+  jti is rejected by python-jose at decode; missing jti raises `KeyError`).
+- Deliverable: `TESTING.md` at repo root documents how to run both suites, what
+  each covers, per-case rationale, AI findings, and verified coverage numbers.
+- Note: the full backend run emits many benign deprecation warnings (Python
+  3.15 beta + FastAPI/starlette/httpx); they do not affect results.
+
+## Completed (previous milestones)
+
 - Added script-first incident analyzer with context-aligned metrics.
 - Created deterministic 100-row fixtures:
   - scripts/incidents-trackflow.csv
@@ -88,7 +129,7 @@
 
 - Normal production and CSV outputs omit customer emails and credentials. Explicit local-only reset console delivery is a documented opt-in exception and must not be used in shared/production logs.
 - API dependency pin uses FastAPI + Pydantic v1 compatibility due Python 3.15 beta environment constraints.
-- `uv run seed` is configured in-repo, but this machine currently does not have `uv` installed on PATH and package download for `uv` was blocked by network connectivity during validation.
+- `uv` is available and working in the current environment (`uv run pytest` runs the full suite with coverage; dev deps live in `pyproject.toml` `[dependency-groups] dev`). The earlier note about `uv` missing from PATH is obsolete.
 
 ## Restored website/backoffice baseline
 

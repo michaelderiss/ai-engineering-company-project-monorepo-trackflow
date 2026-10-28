@@ -81,6 +81,14 @@ The course guidance requires the repo to become a structured monorepo where:
 - Milestone 2 output generation supports selecting different shipment records from the testing interface dataset instead of always using the first shipment.
 - The repo still contains `uis/talent-pipeline-tracker`, which remains useful as a technical reference but is not aligned to TrackFlow logistics scope.
 - **AUTH-02 is complete**: Full JWT-based authentication now flows end-to-end — the FastAPI backend issues tokens via `/auth/login`, and the backoffice app stores them in localStorage, sends them as Bearer headers on protected API calls, handles 401 session expiry, and provides login/register/profile/logout pages. The talent-pipeline-tracker also has route-level auth guard (sharing the same localStorage token). The public website remains completely unaffected.
+- **AUTH-088 is complete**: The authentication API now has a full automated test
+  suite (happy path / edge case / failure mode per endpoint), per the CTO rule
+  "untested code is not production code". It is delivered alongside backlog
+  tickets **API-042** (users/profiles/suppliers endpoint tests) and **FE-019**
+  (frontend utility function tests). Backend: 152 pytest tests pass, `auth.py`
+  100% covered, overall `services.api` 93%. Frontend: 25 Jest tests pass across
+  3 suites. `TESTING.md` at the repo root documents how to run everything, what
+  each suite covers, and the AI-assisted findings.
 - Repository hygiene is enforced: generated Next.js directories such as `node_modules/` and `.next/` are ignored in the root `.gitignore` so large dependency outputs are not pushed.
 
 ## Scope boundaries for upcoming work

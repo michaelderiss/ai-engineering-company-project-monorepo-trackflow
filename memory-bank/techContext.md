@@ -144,7 +144,42 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - Historical seed is explicit (`python scripts/seed_incidents.py`), never an automatic startup import. Expected seed-only totals are 95 incidents, statuses 29 open/52 resolved/14 discarded, categories 14 lost_parcel/45 carrier_issue/19 delivery_failure/17 returns_issue, and branches 50 la_office/45 zaragoza_office.
 - Tests in `tests/test_incidents_api.py` isolate persistence using temporary databases. Browser failure checks use intercepted responses rather than disrupting the user's running API. Setup and manual verification live in existing app/API READMEs.
 
-### 10. Cross-Cutting Error Handling
+### 10. Test infrastructure (AUTH-088 / API-042 / FE-019)
+
+- **Backend (pytest).** Configured in root `pyproject.toml`: `[tool.pytest.ini_options]`
+  sets `pythonpath = ["."]` (so `services` / `packages` resolve), `testpaths = ["tests"]`,
+  and `addopts = "--cov --cov-report=term-missing"`. Coverage: `[tool.coverage.run]`
+  `source = ["services.api"]`, `omit = ["services/api/data/*"]`. Dev deps
+  (`[dependency-groups] dev`): **`httpx<0.28` (CRITICAL pin — 0.28.1 breaks
+  starlette TestClient)**, pytest>=9.2.0, pytest-cov>=7.1.0, freezegun>=1.5.0.
+  Run with `uv run pytest` from the repo root (NOT bare `pytest`). Shared fixtures
+  in `tests/conftest.py` (isolated TinyDB, TestClient, frozen clock). Auth token
+  expiry tests rely on `freezegun.freeze_time` because
+  `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` is read at module import time and must be
+  `monkeypatch`ed on `services.api.auth`.
+- **Backend results (last full run):** 152 passed; `auth.py` 100%, `routes/auth.py`
+  100%, `routes/users.py` 96%, `routes/profiles.py` 93%, `routes/suppliers.py`
+  100%, `database.py` 94%, overall `services.api` 93%. Auth-only: 51 tests.
+  Endpoint suites: users/profiles/suppliers = 56 tests.
+- **Frontend (Jest).** `uis/backoffice` has Jest 30 + ts-jest as devDeps and a
+  `"test": "jest"` script. `jest.config.ts` is non-trivial: `rootDir = "../.."`
+  (monorepo root) so `packages/shared/http.ts` gets coverage-attributed; the ts-jest
+  transform uses the **explicit** path `<rootDir>/uis/backoffice/node_modules/ts-jest`
+  (the `preset: "ts-jest"` shortcut fails because rootDir is not the app dir);
+  `moduleDirectories` includes `uis/backoffice/node_modules`; `collectCoverageFrom`
+  scopes to `uis/backoffice/lib/auth.ts`, `uis/backoffice/lib/incidents.ts`,
+  `packages/shared/http.ts`. Run with `npx jest --coverage` from `uis/backoffice`.
+- **Frontend results (last full run):** 25 passed across 3 suites;
+  `http.ts` 85.45% stmts, `auth.ts` 79.54%, `incidents.ts` 100%.
+- **TS pitfalls encountered:** the `jsonResponse` helper needed parentheses —
+  `ok ?? (status >= 200 && status < 300)` — to satisfy TS5076; the localStorage
+  test mock is typed `MockedStorage = Storage & { jest.Mock methods }` so
+  `.mockImplementation` typechecks (casting `as unknown as Storage` alone erases
+  the jest types).
+- `TESTING.md` at the repo root is the canonical testing guide (run commands,
+  per-case plans, AI findings, real coverage numbers, test counts).
+
+### 11. Cross-Cutting Error Handling
 
 - `packages/shared/http.ts` is the shared TypeScript request boundary: 15-second default timeout, safe status mapping, controlled field errors, guarded JSON parsing, and optional domain validators. Backoffice auth/CIM/supplier/analyzer clients and tracker requests use it; raw response bodies and native fetch/parser messages are not shown in the UI.
 - Backoffice now separates profile 404 from load failure, exposes supplier mutation/recovery states, and downloads CSV via authenticated fetch with object-URL cleanup. Tracker read failures have retry controls. All Next.js apps have route error/loading components.
