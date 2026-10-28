@@ -25,12 +25,14 @@ from shared.incidents_analysis import (  # noqa: E402
 )
 from services.api.auth import get_current_user  # noqa: E402
 from services.api.database import seed_suppliers, seed_users  # noqa: E402
+from services.api.inventory_database import initialize_inventory_database  # noqa: E402
 from services.api.models import User  # noqa: E402
 from services.api.routes.auth import router as auth_router  # noqa: E402
 from services.api.routes.profiles import router as profiles_router  # noqa: E402
 from services.api.routes.suppliers import router as suppliers_router  # noqa: E402
 from services.api.routes.users import router as users_router  # noqa: E402
 from services.api.routes.incidents import router as incidents_router  # noqa: E402
+from services.api.routes.inventory import router as inventory_router  # noqa: E402
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
 
@@ -59,12 +61,14 @@ def ensure_seed_data() -> None:
         except (OSError, ValueError, TypeError, KeyError):
             app.state.storage_ready = False
             logging.getLogger(__name__).error("Startup data is unavailable. Check storage access and data integrity.")
+    initialize_inventory_database()
 
 
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(profiles_router)
 app.include_router(suppliers_router)
+app.include_router(inventory_router)
 
 
 @app.get("/health")

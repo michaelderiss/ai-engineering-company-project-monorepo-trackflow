@@ -188,6 +188,46 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - Reset console delivery is disabled unless `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true`; enable only for local development. This supersedes older notes describing an automatic fallback. Default provider failures expose no reset links or recipients in logs.
 - Auth regression tests now isolate TinyDB storage. `tests/test_error_handling.py` and `tests/http-errors.test.cjs` cover safe failure contracts; see `docs/ERROR_HANDLING.md` for audit evidence and browser/CLI checks. Tracker's Next.js bundler root includes the repository so shared TypeScript imports compile.
 
+### 12. Backend Inventory Management (Milestone 5)
+
+- Canonical entity/seed brief: `trackflowcompany-BRIEFING.en.md`. Inventory is
+  part of the existing FastAPI service under `services/api`; do not create a
+  parallel service at `services/` root. TinyDB auth/users remain unchanged.
+- SQLModel tables are in `services/api/inventory_models.py` (`SKU`, `StockEntry`,
+  `StockExit`); Pydantic request/response contracts are in
+  `services/api/inventory_schemas.py`. Tables are `inventory_skus`,
+  `inventory_stock_entries`, and `inventory_stock_exits`. Both movement tables
+  have database-enforced FKs to the SKU table; SQLite test engines also enable
+  `PRAGMA foreign_keys=ON`.
+- `services/api/inventory_database.py` loads the root `.env`, creates the
+  SQLModel engine from `DATABASE_URL`, provides the request-scoped session, and
+  runs idempotent seed data after TinyDB's admin user has been initialized.
+  Root `pyproject.toml` already declares `sqlmodel` and `psycopg2-binary`; both
+  are also listed in `services/api/requirements.txt`. `.env.example` contains a
+  non-secret transaction-pooler placeholder. Never print or commit the actual
+  connection string.
+- `services/api/main.py` initializes SQLModel metadata and seed rows at startup
+  and registers `services/api/routes/inventory.py` with `/inventory` prefix.
+  Product/order GETs are public; create SKU, inbound, and outbound routes require
+  `get_current_user`. `user_uuid` is a stringified TinyDB ID because current
+  TinyDB `User.id` is an integer; there is no SQLModel User table.
+- `current_stock` exists only in response schemas and is calculated from sums
+  grouped by `(sku_id, warehouse)`. SKU records are warehouse-specific; LA and
+  ZGZ totals are never combined. There is no direct stock-mutation endpoint.
+  Outbound creation locks the SKU row and checks available stock in the same
+  transaction before inserting; the response uses the exact insufficient-stock
+  message from the milestone brief. Dispatches require a nonblank tracking number;
+  losses require null.
+- Startup seeds 6 SKUs, 4 entries (including repeated receipts for one SKU), and
+  3 exits (dispatch and loss). Seeded totals include 25 units for the LA sneaker,
+  14 for the ZGZ sneaker, and 11 LA earbuds.
+- `tests/conftest.py` swaps the production engine for a disposable SQLite engine
+  per test and disposes it at teardown. `tests/test_inventory_api.py` covers all
+  routes and critical constraints. Last full run: **167 passed**, 94% total API
+  coverage; inventory routes 92%, inventory database 97%. Tests did not attempt
+  a live Supabase connection; only presence of `DATABASE_URL` was verified.
+- Setup and route access rules are documented in `services/api/README.md`.
+
 ## Feedback-related status
 
 - Website section parity issue: resolved in `uis/website`.

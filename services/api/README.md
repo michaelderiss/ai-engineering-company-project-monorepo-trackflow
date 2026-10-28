@@ -14,6 +14,41 @@ uvicorn services.api.main:app --reload
 
 The forgot-password endpoint always returns the same confirmation for known and unknown email addresses. Email delivery errors are logged server-side without exposing whether an account exists. Reset tokens are signed, expire at the configured interval, and are recorded as used after a successful password update.
 
+## Inventory Management (Milestone 5)
+
+Inventory uses a dedicated Supabase PostgreSQL connection configured by
+`DATABASE_URL` in the repository-root `.env`. Use the Supabase transaction-pooler
+URI with SSL enabled. `.env.example` contains a placeholder only; never commit a
+real connection string. TinyDB remains the source for users and authentication;
+no user table is created in Supabase.
+
+The SQLModel table definitions are in `services/api/inventory_models.py`, and
+request/response contracts are in `services/api/inventory_schemas.py`. On API
+startup, `SQLModel.metadata.create_all(engine)` creates the three inventory
+tables and an idempotent seeder ensures the six briefing SKUs, four stock entries,
+and three stock exits exist. Seed movements use the TinyDB admin's string ID in
+`user_uuid`; API-created movements record the authenticated TinyDB user's string
+ID. The database enforces movement-to-SKU foreign keys and positive quantities.
+
+`current_stock` is never stored. It is computed from entries minus exits for the
+SKU's own warehouse. A SKU row is warehouse-specific, so LA and ZGZ stock are
+separate even for the same product description. There is deliberately no stock
+adjustment route: stock changes only through inbound entries and outbound exits.
+Outbound writes lock the SKU row and reject any quantity that would make stock
+negative. Dispatches require a tracking number; losses require it to be null.
+
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| GET | `/inventory/products` | Public | List SKUs with computed warehouse stock |
+| POST | `/inventory/products` | Authenticated | Register a SKU |
+| GET | `/inventory/products/{id}` | Public | Get one SKU with computed stock |
+| POST | `/inventory/orders/inbound` | Authenticated | Record a stock entry |
+| POST | `/inventory/orders/outbound` | Authenticated | Record a dispatch or loss |
+| GET | `/inventory/orders` | Public | List movements with associated SKU details |
+
+The complete backend suite, including isolated-SQLite inventory tests, runs with
+`uv run pytest` from the repository root. Tests never connect to Supabase.
+
 ## Centralized Incident Manager
 
 The manager follows `trackflow-BRIEFING.en.md`. Incident persistence is transactional SQLite at `services/api/data/incidents.sqlite3` (git-ignored). Existing user and supplier persistence remains unchanged. Python's standard library provides SQLite; no extra service or credential is needed.

@@ -34,6 +34,14 @@ def isolated_storage(tmp_path, monkeypatch):
     from services.api import incidents as incidents_module
 
     monkeypatch.setattr(incidents_module, "DB_PATH", tmp_path / "incidents.sqlite3")
+    from services.api import inventory_database as inventory_database_module
+
+    inventory_engine = inventory_database_module.create_database_engine(
+        f"sqlite:///{(tmp_path / 'inventory.sqlite3').as_posix()}"
+    )
+    monkeypatch.setattr(inventory_database_module, "engine", inventory_engine)
+    yield
+    inventory_engine.dispose()
 
 
 @pytest.fixture

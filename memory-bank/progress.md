@@ -2,6 +2,42 @@
 
 ## Completed
 
+## Milestone 5 — Backend Inventory Management
+
+- Added the inventory API to the existing `services/api` FastAPI application;
+  TinyDB remains the user/auth store and the existing API service was extended
+  rather than replaced.
+- Added SQLModel tables for `SKU`, `StockEntry`, and `StockExit`, with database
+  foreign keys from both movement tables to `SKU`, positive-quantity checks,
+  warehouse/category checks, and exit/tracking-number constraints. Request and
+  response schemas live separately from the ORM tables.
+- Configured the SQLModel engine from the repo-root `DATABASE_URL`; verified the
+  variable is non-empty without displaying its value. The `.env` file was not
+  changed. Startup creates the schema and idempotently seeds the 6 briefing SKUs,
+  4 stock entries, and 3 stock exits. `.env.example` contains only a placeholder.
+- Added all six `/inventory` routes. Product and order reads are public; product
+  and stock movement writes require the existing TinyDB bearer auth. `current_stock`
+  is computed per SKU/warehouse from grouped entry/exit totals and is never stored.
+  Outbound stock is checked under a SKU row lock before insert; dispatch tracking
+  numbers and loss nullability are validated.
+- Seed results demonstrate separate stock: sneaker SKU `CLT-SNK-W-42` has 25 in
+  LA; `CLT-SNK-W-42-Z` has 14 in ZGZ; earbuds have 11 in LA. No user table is
+  replicated to Supabase; `user_uuid` stores the existing TinyDB integer ID as a
+  string, consistent with the current auth model.
+- Added 15 inventory API tests, including per-warehouse calculations, no-auth
+  writes, oversell rejection with no persistence, dispatch/loss validation,
+  database-level FK enforcement, seed idempotence, and SKU-enriched movement
+  listing. The test fixture redirects SQLModel to isolated SQLite and disposes
+  each engine; tests never connect to Supabase.
+- Validation: **167 backend tests pass**, overall `services.api` coverage is
+  **94%**, `routes/inventory.py` is **92%**, and `inventory_database.py` is
+  **97%**. The project `.venv` could not be used because it is a broken/shared
+  `lib64` symlink, so validation ran in a disposable environment under the OS
+  temp directory. A real Supabase connection/schema initialization was not
+  attempted to avoid writing to the user's database.
+- Setup and endpoint behavior are documented in `services/api/README.md`; the
+  canonical schema and seed data are in `trackflowcompany-BRIEFING.en.md`.
+
 ## AUTH-088 — Authentication test suite (with API-042 and FE-019)
 
 - Closed **AUTH-088** (unit test coverage for the authentication API). Every auth
