@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { API_BASE, getToken } from "../../lib/auth";
+import { apiFetch, apiResponse, isObject } from "../../lib/auth";
 
 type AnalysisResult = {
   source_file: string;
@@ -37,38 +37,8 @@ function pct(value: number, total: number): string {
   return `${((value / total) * 100).toFixed(1)}%`;
 }
 
-/** Add the stored Bearer token to a headers object. */
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const token = getToken();
-  if (token) {
-    extra["Authorization"] = `Bearer ${token}`;
-  }
-  return extra;
-}
-
-/** Wraps fetch with automatic token injection and 401 handling. */
-async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (options.headers) {
-    const incoming = options.headers as Record<string, string>;
-    for (const key of Object.keys(incoming)) {
-      headers[key] = incoming[key];
-    }
-  }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
-  const response = await fetch(url, { ...options, headers, cache: "no-store" });
-  if (response.status === 401) {
-    try { localStorage.removeItem("trackflow_access_token"); } catch { /* ignore */ }
-    window.location.href = "/login";
-    throw new Error("Session expired.");
-  }
-  return response;
+function validAnalysis(value: unknown): boolean {
+  return isObject(value) && ["total_records", "valid_records", "invalid_records", "satisfaction_average", "scored_closed_incidents", "closed_incidents"].every((field) => typeof value[field] === "number") && ["invalid_breakdown", "category_breakdown", "status_breakdown", "satisfaction_breakdown"].every((field) => isObject(value[field]) && Object.values(value[field]).every((count) => typeof count === "number"));
 }
 
 export default function IncidentFileAnalyzerPage() {
@@ -76,6 +46,8 @@ export default function IncidentFileAnalyzerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
 
   const invalidRows = useMemo(() => {
     if (!result) return [];
@@ -95,22 +67,16 @@ export default function IncidentFileAnalyzerPage() {
 
     setError(null);
     setLoading(true);
+    setExportSuccess(false);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await authFetch(`${API_BASE}/api/incidents/analyze`, {
+      const data = await apiFetch<AnalysisResult>("/api/incidents/analyze", {
         method: "POST",
         body: formData,
-      });
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Analysis failed.");
-      }
-
-      const data = (await response.json()) as AnalysisResult;
+      }, validAnalysis);
       setResult(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unexpected error.";
@@ -121,8 +87,26 @@ export default function IncidentFileAnalyzerPage() {
     }
   }
 
-  function onExport(): void {
-    window.open(`${API_BASE}/api/incidents/results/export`, "_blank");
+  async function onExport(): Promise<void> {
+    setExporting(true);
+    setExportSuccess(false);
+    setError(null);
+    let url: string | null = null;
+    try {
+      const response = await apiResponse("/api/incidents/results/export");
+      if (!response.headers.get("content-type")?.includes("text/csv")) throw new Error("Unexpected download format");
+      url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "results.csv";
+      link.click();
+      setExportSuccess(true);
+    } catch {
+      setError("Could not download the results. Please try Download results CSV again.");
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+      setExporting(false);
+    }
   }
 
   return (
@@ -144,11 +128,11 @@ export default function IncidentFileAnalyzerPage() {
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
           <div className="actions">
-            <button type="submit" disabled={loading}>
+            <button type="submit" disabled={loading || exporting}>
               {loading ? "Analyzing..." : "Analyze incidents"}
             </button>
-            <button type="button" onClick={onExport} disabled={!result || loading}>
-              Download results CSV
+            <button type="button" onClick={() => void onExport()} disabled={!result || loading || exporting}>
+              {exporting ? "Downloading..." : "Download results CSV"}
             </button>
             <a href="/" className="launcher-link">
               Back to launcher
@@ -156,6 +140,7 @@ export default function IncidentFileAnalyzerPage() {
           </div>
         </form>
         {error && <p className="error">{error}</p>}
+        {exportSuccess && <p role="status" className="success">Download started successfully.</p>}
       </section>
 
       {result && (

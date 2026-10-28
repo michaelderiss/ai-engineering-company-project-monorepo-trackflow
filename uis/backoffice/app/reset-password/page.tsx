@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { API_BASE } from "../../lib/auth";
+import { publicApiFetch } from "../../lib/auth";
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState("");
@@ -26,20 +26,12 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE}/auth/reset-password`, {
+      await publicApiFetch("/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, new_password: password }),
         cache: "no-store",
       });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(
-          typeof body?.detail === "string"
-            ? body.detail
-            : "This reset link is invalid or expired.",
-        );
-      }
       window.location.href = "/login?passwordReset=success";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reset the password.");

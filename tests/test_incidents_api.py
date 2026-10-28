@@ -120,3 +120,33 @@ def test_bearer_authentication_required(client):
     app.dependency_overrides.pop(get_current_user, None)
     assert client.get("/api/incidents").status_code == 401
     assert client.post("/api/incidents", json=payload()).status_code == 401
+
+
+def test_error_contract_outside_manager(client):
+    response = client.get("/suppliers?category=unavailable")
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["message"]
+    response = client.post("/suppliers", json={})
+    assert response.status_code == 422
+    assert "name" in response.json()["errors"]
+    app.dependency_overrides.pop(get_current_user, None)
+    response = client.get("/suppliers")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_analysis_unexpected_failure_does_not_leak(client, monkeypatch):
+    def fail(_):
+        raise RuntimeError("PRIVATE_AUDIT_MARKER")
+    monkeypatch.setattr("services.api.main.analyze_incidents_text", fail)
+    response = client.post("/api/incidents/analyze", files={"file": ("audit.csv", b"x,y\n1,2\n", "text/csv")})
+    assert response.status_code == 500
+    assert "PRIVATE_AUDIT_MARKER" not in response.text
+    assert response.json()["message"] == "Something went wrong. Please try again."
+
+
+def test_wrong_csv_headers_return_safe_error(client):
+    response = client.post("/api/incidents/analyze", files={"file": ("audit.csv", b"wrong,columns\nx,y\n", "text/csv")})
+    assert response.status_code == 400
+    assert "CSV" in response.json()["message"]

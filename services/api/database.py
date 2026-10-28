@@ -27,6 +27,10 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _password_reset_lock = Lock()
 
 
+class RecordConflictError(ValueError):
+    pass
+
+
 def get_password_hash(password: str) -> str:
     return _pwd_context.hash(password)
 
@@ -204,7 +208,7 @@ def create_user(payload: UserCreate) -> User:
         profile_table = db.table("profiles")
         query = Query()
         if user_table.get(query.email == payload.email):
-            raise ValueError("A user with this email already exists.")
+            raise RecordConflictError("A user with this email already exists.")
 
         created_at = _now_iso()
         user_document = {
@@ -328,7 +332,7 @@ def create_profile_for_user(user_id: int, payload: ProfileCreate) -> Profile:
         profile_table = db.table("profiles")
         query = Query()
         if profile_table.get(query.user_id == user_id):
-            raise ValueError("This user already has a profile.")
+            raise RecordConflictError("This user already has a profile.")
         profile_doc_id = profile_table.insert(
             {
                 "user_id": user_id,

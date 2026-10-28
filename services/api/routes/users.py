@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from services.api.auth import get_current_user
-from services.api.database import create_user, delete_user, get_user_by_id, list_users, update_user
+from services.api.database import RecordConflictError, create_user, delete_user, get_user_by_id, list_users, update_user
 from services.api.models import Role, User, UserCreate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -22,8 +22,8 @@ def _ensure_access(current_user: User, user_id: int) -> None:
 def create_new_user(payload: UserCreate) -> User:
     try:
         return create_user(payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RecordConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A user with this email already exists.") from exc
 
 
 @router.get("", response_model=list[User])

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from uuid import uuid4
+import pytest
 
 from fastapi.testclient import TestClient
 
 from services.api.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_identity_storage(tmp_path, monkeypatch):
+    monkeypatch.setattr("services.api.database.USER_DB_PATH", tmp_path / "users.json")
+    monkeypatch.setattr("services.api.database.DB_PATH", tmp_path / "suppliers.json")
 
 
 def _make_email(prefix: str) -> str:

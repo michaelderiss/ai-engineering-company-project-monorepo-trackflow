@@ -49,13 +49,13 @@
 - Added authenticated `POST /auth/change-password`, which verifies the current password before applying the new password and returns 400 for an incorrect current password.
 - Added persistent token records in TinyDB, storing a hash of each reset token ID and marking a record used when the password changes.
 - Added Resend integration in `services/api/email.py`; API key and sender are environment-only values. Root `.env.example`, `.gitignore` rules, `python-dotenv` loading, and `services/api/README.md` document local setup.
-- Added console fallback in email delivery: when Resend is unconfigured, blocked, or rejects a send, the generated reset link is printed to the API console so the forgot/reset flow remains usable locally.
+- Added console fallback in email delivery; after the error-handling audit this requires explicit `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in local development. Normal/provider-failure logs no longer contain reset links or recipients.
 - Added backoffice `/forgot-password` and `/reset-password` public pages, plus protected `/account/change-password`. Login links to recovery; the profile view links to password change. Reset pages are exempt from the inline route guard.
 - Added auth API tests for account enumeration resistance, successful reset and token replay rejection, expired token rejection, and change-password current-password checks.
 - Repaired malformed supplier PATCH calls that prevented app-wide typechecking; they now use the existing authenticated fetch helper and send the expected JSON payloads.
 - Moved logout token clearing/redirect into a client effect so the auth page can be statically prerendered.
 - **Environment note**: the working `.env` lives at the repo root (where `services/api/main.py` loads it via `python-dotenv`). A local `uis/backoffice/.env.local` sets `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` for the backoffice app; both files are git-ignored.
-- **Verified fallback**: confirmed `services/api/email.py` prints the reset link to the API console instead of raising when Resend is unreachable or unconfigured; direct invocation returned without raising, and the earlier traceback (`raise EmailDeliveryError ... from exc`) no longer exists in source.
+- **Verified fallback**: explicit development opt-in prints a usable link; without opt-in, delivery failures are logged safely and the public endpoint retains its generic confirmation.
 - **Verified**: `tests/test_auth_api.py` passes (5 tests); `uis/backoffice` TypeScript typecheck passes.
 - **Verified**: `uis/backoffice` production build passes and generates the new reset/change-password routes.
 - **Setup requirement**: Configure a Resend API key and verified sender in the local `.env` or deployment environment before expecting real reset emails.
@@ -73,9 +73,20 @@
 - Local storage was seeded with 95 incidents; browser verification added one carrier_issue incident at la_warehouse and advanced it to in_progress (96 total after that check). Seeding again will not remove browser-created records.
 - API setup/expected totals and browser/PR screenshot steps are documented in the API and backoffice READMEs. No embeddings or automatic alerts were added; they are outside this delivery.
 
+## Error-Handling Audit
+
+- Audited the merged CIM baseline and existing auth, suppliers, analyzer, tracker, public site, scripts and data utilities before changing code. Findings/resolutions and manual testing are recorded in `docs/ERROR_HANDLING.md`.
+- Added shared safe HTTP handling in `packages/shared/http.ts`: timeouts, JSON guards, safe error/field messages and typed failures. Existing app clients retain their authentication behavior and now validate domain payloads before rendering.
+- Added supplier mutation states/retry feedback and stale-response protection, profile error discrimination/retry, authenticated CSV export with cleanup, tracker note/detail retries, and error/loading routes in all three Next.js apps.
+- Standardized JSON API failures while retaining CIM validation 400 and other model validation 422. Auth headers are preserved; broad exception text is no longer returned to users. Startup storage failure is safe and reflected in health status.
+- Hardened scripts for file/encoding/CSV/database/subprocess failures with scoped catches, stderr diagnostics and nonzero critical exits. Shared CSV structure checks prevent false-success analyses. Removed raw dataframe sample output and made the memory-bank guard fail closed.
+- Protected reset credentials by making console-link fallback explicitly local-only and off by default. Existing `.env` credentials were not read or modified for verification.
+- Verification: 50 isolated Python tests and 8 Node error-contract tests pass; production builds pass for website, backoffice, and tracker. Tracker's shared-source bundler boundary and script prop shape were corrected to support those builds.
+- Browser checks with synthetic intercepted responses verified offline supplier mutations, malformed data recovery, profile failure/retry, authorized CSV downloads and offline login. No real email delivery was claimed or exercised.
+
 ## Notes
 
-- No customer emails are printed or exported by script/API/UI outputs.
+- Normal production and CSV outputs omit customer emails and credentials. Explicit local-only reset console delivery is a documented opt-in exception and must not be used in shared/production logs.
 - API dependency pin uses FastAPI + Pydantic v1 compatibility due Python 3.15 beta environment constraints.
 - `uv run seed` is configured in-repo, but this machine currently does not have `uv` installed on PATH and package download for `uv` was blocked by network connectivity during validation.
 

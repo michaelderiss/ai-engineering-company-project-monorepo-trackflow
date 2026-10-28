@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { API_BASE, apiFetch, setToken, redirectToHome } from "../../lib/auth";
+import { publicApiFetch, isObject, RequestError, setToken, redirectToHome } from "../../lib/auth";
 
 type FieldErrors = {
   email?: string;
@@ -20,9 +20,11 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [accountCreated, setAccountCreated] = useState(false);
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (accountCreated) return;
     setLoading(true);
     setError(null);
     setFieldErrors({});
@@ -56,62 +58,30 @@ export default function RegisterPage() {
       }
 
       // Step 1: Create the user (POST /users) — this endpoint is public
-      const userResponse = await fetch(`${API_BASE}/users`, {
+      await publicApiFetch("/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         cache: "no-store",
       });
 
-      if (!userResponse.ok) {
-        // Try to parse field-level validation errors
-        const contentType = userResponse.headers.get("content-type") ?? "";
-        let errorMessage = `Registration failed (${userResponse.status}).`;
-
-        if (contentType.includes("application/json")) {
-          try {
-            const errorBody = await userResponse.json();
-            if (typeof errorBody?.detail === "string") {
-              errorMessage = errorBody.detail;
-              // Check for known field errors
-              const detailLower = errorBody.detail.toLowerCase();
-              if (detailLower.includes("email")) {
-                setFieldErrors((prev) => ({ ...prev, email: errorBody.detail }));
-              }
-            }
-          } catch {
-            // ignore parse errors
-          }
-        } else {
-          const text = await userResponse.text();
-          if (text) errorMessage = text;
-        }
-
-        throw new Error(errorMessage);
-      }
+      setAccountCreated(true);
 
       // Step 2: Login with the same credentials to get the token
       const loginBody = new URLSearchParams();
       loginBody.set("username", email.trim());
       loginBody.set("password", password);
 
-      const loginResponse = await fetch(`${API_BASE}/auth/login`, {
+      const loginData = await publicApiFetch<{ access_token: string }>("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: loginBody.toString(),
         cache: "no-store",
-      });
-
-      if (!loginResponse.ok) {
-        // Account was created but login failed — redirect to login page
-        window.location.href = "/login";
-        return;
-      }
-
-      const loginData = (await loginResponse.json()) as { access_token: string };
+      }, (value) => isObject(value) && typeof value.access_token === "string" && value.access_token.length > 0);
       setToken(loginData.access_token);
       redirectToHome();
     } catch (err) {
+      if (err instanceof RequestError) setFieldErrors(err.fields);
       const message = err instanceof Error ? err.message : "Unexpected error.";
       setError(message);
     } finally {
@@ -192,11 +162,13 @@ export default function RegisterPage() {
           {error && <p className="error">{error}</p>}
 
           <div className="actions">
-            <button type="submit" disabled={loading}>
+            <button type="submit" disabled={loading || accountCreated}>
               {loading ? "Creating account..." : "Create account"}
             </button>
           </div>
         </form>
+
+        {accountCreated && <p className="success">Your account was created. <a href="/login" className="text-link">Continue to sign in</a>.</p>}
 
         <p>
           Already have an account?{" "}

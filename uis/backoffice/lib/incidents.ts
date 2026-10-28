@@ -1,4 +1,4 @@
-import { API_BASE, clearToken, getToken, redirectToLogin } from "./auth";
+import { apiFetch, isObject, RequestError } from "./auth";
 
 export type Incident = {
   id: number;
@@ -28,37 +28,13 @@ export type IncidentSummary = {
   by_branch: Record<string, number>;
 };
 
-export class IncidentApiError extends Error {
-  constructor(message: string, public fields: Record<string, string> = {}) {
-    super(message);
-  }
-}
+export { RequestError as IncidentApiError };
 
 export async function incidentRequest<T>(path = "", options: RequestInit = {}): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}/api/incidents${path}`, {
-      ...options,
-      signal: options.signal ?? AbortSignal.timeout(15000),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken() ?? ""}` },
-      cache: "no-store",
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    throw new IncidentApiError("Could not reach TrackFlow. Please try again.");
-  }
-  if (response.status === 401) {
-    clearToken();
-    redirectToLogin();
-    throw new IncidentApiError("Your session has expired. Please sign in again.");
-  }
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const fields = body?.errors && typeof body.errors === "object" ? body.errors : {};
-    throw new IncidentApiError(
-      response.status >= 500 ? "TrackFlow could not complete the request. Please try again." : body?.message ?? "Could not complete the request. Please try again.",
-      fields,
-    );
-  }
-  return response.json() as Promise<T>;
+  return apiFetch<T>(`/api/incidents${path}`, options, (value) => {
+    if (path === "/options") return isObject(value) && ["branches", "categories", "statuses", "origins"].every((key) => isObject(value[key]) && Object.values(value[key]).every((label) => typeof label === "string")) && isObject(value.transitions) && Object.values(value.transitions).every((next) => Array.isArray(next) && next.every((status) => typeof status === "string"));
+    if (path === "/summary") return isObject(value) && typeof value.total === "number" && ["by_status", "by_category", "by_origin", "by_branch"].every((key) => isObject(value[key]) && Object.values(value[key]).every((count) => typeof count === "number"));
+    const validIncident = (item: unknown) => isObject(item) && typeof item.id === "number" && ["title", "description", "status", "origin", "branch", "category", "created_at", "updated_at"].every((key) => typeof item[key] === "string");
+    return Array.isArray(value) ? value.every(validIncident) : validIncident(value);
+  });
 }

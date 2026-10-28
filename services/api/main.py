@@ -8,9 +8,9 @@ import sys
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
-from fastapi.exception_handlers import request_validation_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,8 +52,13 @@ _LAST_ANALYSIS: dict | None = None
 
 @app.on_event("startup")
 def ensure_seed_data() -> None:
-    seed_suppliers()
-    seed_users()
+    app.state.storage_ready = True
+    for seed in (seed_suppliers, seed_users):
+        try:
+            seed()
+        except (OSError, ValueError, TypeError, KeyError):
+            app.state.storage_ready = False
+            logging.getLogger(__name__).error("Startup data is unavailable. Check storage access and data integrity.")
 
 
 app.include_router(auth_router)
@@ -64,6 +69,8 @@ app.include_router(suppliers_router)
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    if not getattr(app.state, "storage_ready", True):
+        raise HTTPException(503, "Service storage is unavailable.")
     return {"status": "ok"}
 
 
@@ -86,15 +93,15 @@ async def analyze_incidents(
             status_code=400,
             detail="Invalid encoding. CSV must be UTF-8.",
         ) from exc
-    except Exception as exc:  # pragma: no cover
-        raise HTTPException(status_code=400, detail=f"Could not read file: {exc}") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Could not read the upload. Please try again.") from exc
 
     try:
         result = analyze_incidents_text(csv_text)
-    except Exception as exc:
+    except (ValueError, csv.Error) as exc:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid CSV structure or values: {exc}",
+            detail="The CSV structure is invalid. Check the required columns and try again.",
         ) from exc
 
     payload = result.to_dict()
@@ -154,8 +161,6 @@ def is_manager_request(request):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    if not is_manager_request(request):
-        return await request_validation_exception_handler(request, exc)
     errors = {}
     for error in exc.errors():
         field = str(error["loc"][-1])
@@ -170,19 +175,25 @@ async def validation_exception_handler(request, exc):
         else:
             message = "Please enter a valid value."
         errors[field] = message
-    return JSONResponse({"message": "Please check the highlighted fields.", "errors": errors}, status_code=400)
+    message = "Please check the highlighted fields."
+    return JSONResponse({"message": message, "detail": message, "errors": errors}, status_code=400 if is_manager_request(request) else 422)
 
 
 @app.exception_handler(Exception)
 async def unexpected_exception_handler(request, exc):
-    logging.getLogger(__name__).error("API request failed", exc_info=exc)
+    logging.getLogger(__name__).error("API request failed (%s)", type(exc).__name__)
     return JSONResponse({"message": "Something went wrong. Please try again."}, status_code=500)
 
 
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc: HTTPException):
-    if is_manager_request(request):
-        if isinstance(exc.detail, dict):
-            return JSONResponse({"message": "Please check the highlighted fields.", "errors": exc.detail}, status_code=exc.status_code, headers=exc.headers)
-        return JSONResponse({"message": str(exc.detail)}, status_code=exc.status_code, headers=exc.headers)
-    return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request, exc):
+    if exc.status_code >= 500:
+        message = "Something went wrong. Please try again."
+    elif isinstance(exc.detail, dict):
+        message = "Please check the highlighted fields."
+    else:
+        message = str(exc.detail)
+    body = {"message": message, "detail": message}
+    if isinstance(exc.detail, dict) and exc.status_code < 500:
+        body["errors"] = exc.detail
+    return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)

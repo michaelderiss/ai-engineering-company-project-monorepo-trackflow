@@ -31,10 +31,8 @@ function loadTestingInterfaceDataset() {
 
   let orderContext = { orderId: "TF-ORDER-001", client: "Northstar Outfitters" };
 
-  try {
+  if (/const\s+milestone2OrderContext\s*=/.test(source)) {
     orderContext = extractLiteralFromFile(source, "milestone2OrderContext", "\\{", "\\}");
-  } catch {
-    // Keep default context when optional object does not exist.
   }
 
   return {
@@ -58,20 +56,33 @@ function parseShipmentArg() {
   return value && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-const dataset = loadTestingInterfaceDataset();
-const selectedShipmentId = parseShipmentArg() ?? dataset.selectedShipmentId;
-const output = buildMilestone2Output({
-  ...dataset,
-  selectedShipmentId,
-});
-const txt = formatMilestone2DummyOrderText(output);
-
-fs.writeFileSync(txtPath, `${txt}\n`, "utf8");
-fs.writeFileSync(jsonPath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
-
-console.log(`Milestone 2 output synced:`);
-console.log(`- ${path.relative(repoRoot, txtPath)}`);
-console.log(`- ${path.relative(repoRoot, jsonPath)}`);
-if (selectedShipmentId) {
-  console.log(`- selected shipment: ${selectedShipmentId}`);
+function main() {
+  let dataset;
+  try {
+    dataset = loadTestingInterfaceDataset();
+  } catch {
+    console.error("Could not load the milestone dataset. Check source access and data format, then try again.");
+    return 1;
+  }
+  const selectedShipmentId = parseShipmentArg() ?? dataset.selectedShipmentId;
+  let output;
+  let txt;
+  try {
+    output = buildMilestone2Output({ ...dataset, selectedShipmentId });
+    txt = formatMilestone2DummyOrderText(output);
+  } catch {
+    console.error("Could not generate milestone output. Check shipment, product, and carrier data, then try again.");
+    return 1;
+  }
+  try {
+    fs.writeFileSync(txtPath, `${txt}\n`, "utf8");
+    fs.writeFileSync(jsonPath, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+  } catch {
+    console.error("Could not save milestone output. Check directory permissions and retry generation.");
+    return 1;
+  }
+  console.log("Milestone 2 output synced.");
+  return 0;
 }
+
+process.exitCode = main();

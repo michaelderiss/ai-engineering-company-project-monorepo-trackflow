@@ -2,29 +2,29 @@
 Safe snippet for basic pandas cleaning. Copy and adapt for your dataset.
 Run: python pandas_clean.py  (ensure pandas is installed)
 """
-import pandas as pd
+import sys
 
-# Load (adjust path and kwargs as needed)
-df = pd.read_csv("data.csv")  # or read_json, read_excel
-print("df_shape", df.shape)
-print("df_dtypes", df.dtypes)
 
-# Drop fully null columns
-df = df.dropna(axis=1, how="all")
-print("df_shape_after_drop_all_null_cols", df.shape)
+def main() -> int:
+	try:
+		import pandas as pd
+	except ImportError:
+		print("Pandas is required. Install pandas in your environment and try again.", file=sys.stderr)
+		return 1
+	try:
+		data = pd.read_csv("data.csv")
+	except (OSError, UnicodeError, pd.errors.ParserError, pd.errors.EmptyDataError):
+		print("Could not read data.csv. Check the file, permissions, encoding, and CSV structure, then try again.", file=sys.stderr)
+		return 1
+	print("input_shape", data.shape)
+	data = data.dropna(axis=1, how="all")
+	data.columns = data.columns.str.strip().str.lower().str.replace(" ", "_")
+	before = len(data)
+	data = data.drop_duplicates()
+	print("rows_dropped_duplicates", before - len(data))
+	print("output_shape", data.shape)
+	return 0
 
-# Fill or drop nulls in key columns (customise columns)
-# df = df.dropna(subset=["required_col"])
-# df["optional_col"] = df["optional_col"].fillna(0)
 
-# Normalise column names (optional)
-df.columns = df.columns.str.strip().str.lower().str.replace(" ", "_")
-print("df_columns", list(df.columns))
-
-# Deduplicate (optional)
-before = len(df)
-df = df.drop_duplicates()
-print("rows_dropped_duplicates", before - len(df))
-
-# Sample output
-print("df_head", df.head())
+if __name__ == "__main__":
+	raise SystemExit(main())

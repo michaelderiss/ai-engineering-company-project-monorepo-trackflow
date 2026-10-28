@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from services.api.auth import get_current_user
 from services.api.database import (
+    RecordConflictError,
     create_profile_for_user,
     get_profile_for_user,
     update_profile_for_user,
@@ -20,8 +21,8 @@ def create_profile(
 ) -> Profile:
     try:
         return create_profile_for_user(current_user.id, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RecordConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user already has a profile.") from exc
 
 
 @router.get("", response_model=list[Profile])
@@ -52,8 +53,8 @@ def patch_my_profile(
     if existing is None:
         try:
             return create_profile_for_user(current_user.id, payload)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        except RecordConflictError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user already has a profile.") from exc
 
     updated = update_profile_for_user(current_user.id, payload)
     if updated is None:

@@ -28,16 +28,26 @@ const FALLBACK_ORDER: Milestone2Order = {
   carrierReason: "Generated Milestone 2 output was not found.",
   trackingId: "Unavailable",
   expectedDeliveryWindow: "Unavailable",
-  cxNote: "Run npm run milestone2:sync in uis/backoffice to regenerate .trackflow-milestone2-output.json from src/testing-interface.js data.",
+  cxNote: "Dispatch information is unavailable. Reload this page or contact operations support.",
 };
 
 export function readMilestone2Order(): Milestone2Order {
+  const jsonPath = join(process.cwd(), "..", "..", ".trackflow-milestone2-output.json");
+  let text: string;
   try {
-    const jsonPath = join(process.cwd(), "..", "..", ".trackflow-milestone2-output.json");
-    const jsonPayload = JSON.parse(readFileSync(jsonPath, "utf8")) as Milestone2Order;
-
-    return jsonPayload;
+    text = readFileSync(jsonPath, "utf8");
   } catch {
+    console.warn("Dispatch output could not be loaded; showing the unavailable state.");
     return FALLBACK_ORDER;
   }
+  let jsonPayload: unknown;
+  try { jsonPayload = JSON.parse(text); } catch {
+    console.warn("Dispatch output could not be parsed; showing the unavailable state.");
+    return FALLBACK_ORDER;
+  }
+  if (!jsonPayload || typeof jsonPayload !== "object" || !Object.keys(FALLBACK_ORDER).every((key) => typeof (jsonPayload as Record<string, unknown>)[key] === "string")) {
+    console.warn("Dispatch output is incomplete; showing the unavailable state.");
+    return FALLBACK_ORDER;
+  }
+  return jsonPayload as Milestone2Order;
 }
