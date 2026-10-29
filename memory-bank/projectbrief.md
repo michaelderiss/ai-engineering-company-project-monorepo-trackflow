@@ -92,8 +92,10 @@ The course guidance requires the repo to become a structured monorepo where:
 - **Milestone 5 inventory is complete and live-verified**: the existing FastAPI
   service uses a separate SQLModel connection to Supabase while TinyDB remains
   the auth store. The `/inventory` API computes stock from per-warehouse
-  movements, enforces nonnegative stock, and seeds the briefing inventory.
-  Full backend suite: 167 passing; live authenticated write/validation smoke
+  movements, enforces nonnegative stock, and seeds the briefing inventory. The
+  backoffice adds protected products, inbound, outbound, and movement-history
+  views using one authenticated API client. Full backend suite: 167 passing;
+  full frontend suite: 32 passing; live authenticated write/validation smoke
   tests passed and temporary test data was cleaned up.
 - Repository hygiene is enforced: generated Next.js directories such as `node_modules/` and `.next/` are ignored in the root `.gitignore` so large dependency outputs are not pushed.
 

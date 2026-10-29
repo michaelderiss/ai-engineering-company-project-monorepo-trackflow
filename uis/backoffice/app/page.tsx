@@ -23,6 +23,12 @@ const APP_OPTIONS: AppOption[] = [
     path: "/suppliers",
   },
   {
+    id: "inventory",
+    label: "Inventory Control",
+    description: "View warehouse stock, record movements, and review order history.",
+    path: "/inventory/products",
+  },
+  {
     id: "incident-file-analyzer",
     label: "Incident File Analyzer",
     description: "Upload incidents CSV and review quality and CX metrics.",

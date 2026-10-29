@@ -17,6 +17,13 @@ const SAFE_MESSAGES = new Set([
   "Please use 120 characters or fewer.", "Please enter a valid value.",
 ]);
 
+function isSafeMessage(value: unknown): value is string {
+  return typeof value === "string" && (
+    SAFE_MESSAGES.has(value) ||
+    /^Insufficient stock for SKU '[A-Za-z0-9._-]{1,80}'\. Available: \d+, requested: \d+\.$/.test(value)
+  );
+}
+
 export async function requestResponse(url: string, options: RequestInit = {}): Promise<Response> {
   let response: Response;
   try {
@@ -35,7 +42,7 @@ export async function requestResponse(url: string, options: RequestInit = {}): P
   if (isObject(body) && isObject(body.errors)) {
     for (const [field, value] of Object.entries(body.errors)) {
       if (field !== "__proto__" && field !== "constructor") {
-        fields[field] = typeof value === "string" && SAFE_MESSAGES.has(value) ? value : "Please check this field.";
+        fields[field] = isSafeMessage(value) ? value : "Please check this field.";
       }
     }
   }
@@ -46,7 +53,7 @@ export async function requestResponse(url: string, options: RequestInit = {}): P
   else if (response.status === 403) message = "You do not have permission to do this. Return home or contact support.";
   else if (response.status === 404) message = "The requested item was not found. Return home or try again.";
   else if (Object.keys(fields).length) message = "Please check the highlighted fields and try again.";
-  else if (typeof detail === "string" && SAFE_MESSAGES.has(detail)) message = detail;
+  else if (isSafeMessage(detail)) message = detail;
   else if (response.status === 422) message = "Please check the entered values and try again.";
   throw new RequestError(message, response.status, fields);
 }

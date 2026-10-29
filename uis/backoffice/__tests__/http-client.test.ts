@@ -76,6 +76,26 @@ describe("requestResponse", () => {
     );
   });
 
+  it("surfaces the validated inventory oversell message", async () => {
+    const detail = "Insufficient stock for SKU 'TEC-EAR-001'. Available: 1, requested: 2.";
+    stubFetch(() => Promise.resolve(jsonResponse(400, { detail })));
+
+    await expect(requestResponse("https://api.example/inventory/orders/outbound"))
+      .rejects.toMatchObject({ status: 400, message: detail });
+  });
+
+  it("keeps malformed inventory details generic", async () => {
+    stubFetch(() => Promise.resolve(jsonResponse(400, {
+      detail: "Insufficient stock for SKU 'secret\ninternal detail'. Available: 1, requested: 2.",
+    })));
+
+    await expect(requestResponse("https://api.example/inventory/orders/outbound"))
+      .rejects.toMatchObject({
+        status: 400,
+        message: "Could not complete the request. Please try again.",
+      });
+  });
+
   it("maps 422 without a safe detail to a generic validation message (failure mode)", async () => {
     stubFetch(() => Promise.resolve(jsonResponse(422, { detail: "server internals" })));
     await expect(requestResponse("https://api.example/incidents")).rejects.toMatchObject({

@@ -74,12 +74,52 @@ Use the printed backoffice URL, sign in, and select Incident Manager. The API de
 
 Status options only show valid next steps. Invalid transitions sent directly via the API return 400. Seed-only historical values map CLOSED to resolved and both DELAYED_DELIVERY and DAMAGE to carrier_issue.
 
+## Inventory Management: Browser Verification
+
+The inventory interface adds four protected routes: `/inventory/products`,
+`/inventory/orders/inbound`, `/inventory/orders/outbound`, and
+`/inventory/orders`. It uses the existing FastAPI service and TinyDB bearer
+authentication; the inventory data lives in Supabase through SQLModel.
+
+The repository-root `.env` must contain the configured `DATABASE_URL`. The
+backoffice `.env.local` uses `NEXT_PUBLIC_INVENTORY_API_URL=http://localhost:8000`
+for the local API. Public Next.js environment values are embedded at startup/build,
+so restart the frontend after changing the URL.
+
+From separate terminals at the repository root:
+
+```powershell
+uv run uvicorn services.api.main:app --reload
+npm --prefix uis/backoffice run dev
+```
+
+Sign in using an existing TrackFlow account, open Inventory Control from the
+Operations Home launcher, then verify:
+
+1. Products displays the six seeded SKUs, their warehouse, and computed stock.
+	LA and ZGZ sneaker rows must remain separate.
+2. Record an inbound receipt and confirm the product stock increases. The form
+	selects by product name/SKU and uses its assigned warehouse.
+3. Select an outbound product and confirm its current stock appears before
+	entering quantity. Entering more than available shows a warning; submitting
+	must display the API's insufficient-stock error and leave stock unchanged.
+4. Record a valid dispatch with a tracking number and confirm stock decreases.
+	A dispatch without tracking must be rejected; a confirmed loss has no
+	tracking number.
+5. Order history is read-only and shows product, movement type, quantity,
+	warehouse, date, and creator ID.
+6. Open each route in a logged-out session and confirm it redirects to `/login`.
+
+Stock indicators currently mark 0 as out, 1–9 as low, and 10+ as healthy. These
+are visual guidance only; the API is authoritative for stock availability.
+
 Automated checks:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests -q
 npm --prefix uis/backoffice run typecheck
 npm --prefix uis/backoffice run build
+npm --prefix uis/backoffice test -- --runInBand
 ```
 
 ## Error-Handling Verification

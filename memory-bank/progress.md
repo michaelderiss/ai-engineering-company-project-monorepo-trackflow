@@ -49,6 +49,34 @@
 - Setup and endpoint behavior are documented in `services/api/README.md`; the
   canonical schema and seed data are in `trackflowcompany-BRIEFING.en.md`.
 
+## Milestone 5.2 — Backoffice Inventory Interface
+
+- Added protected backoffice routes for inventory products, inbound receipts,
+  outbound dispatch/loss, and read-only movement history. The existing global
+  auth guard redirects unauthenticated users; all inventory API traffic goes
+  through `uis/backoffice/lib/inventory.ts`, which attaches the stored Bearer
+  token and validates response shapes.
+- Added product stock indicators (zero = out, 1–9 = low, 10+ = healthy) with the
+  thresholds documented next to the style rule. Product rows link to preselected
+  inbound/outbound forms. The outbound form refreshes selected SKU stock before
+  quantity entry and shows an over-stock warning; the API still enforces the
+  final check. History distinguishes inbound/outbound and shows product, quantity,
+  warehouse, date, and creator ID.
+- Configured ignored `uis/backoffice/.env.local` with
+  `NEXT_PUBLIC_INVENTORY_API_URL=http://localhost:8000`; root `.env.example` has
+  the same local placeholder. Restart/rebuild the frontend after changing this
+  public build-time variable.
+- Updated shared HTTP safe-message handling to expose only a strictly validated
+  inventory oversell message; malformed/unexpected API details remain generic.
+- Added `inventory.test.ts`; full frontend suite is **32 passing across 4 suites**.
+  Jest coverage: inventory client **88.88%**, shared HTTP **89.28%**, all files
+  **87.74%** statements. Backoffice `npm run typecheck` and `npm run build` pass;
+  all four inventory routes are generated.
+- Local environment quirk: Next.js build updated `uis/backoffice/tsconfig.json`
+  to the framework-required `jsx: preserve`. Keep this generated configuration.
+- Backoffice/API local verification instructions are documented in
+  `uis/backoffice/README.md` and `TESTING.md`.
+
 ## AUTH-088 — Authentication test suite (with API-042 and FE-019)
 
 - Closed **AUTH-088** (unit test coverage for the authentication API). Every auth

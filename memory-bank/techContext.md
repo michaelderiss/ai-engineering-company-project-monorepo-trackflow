@@ -238,6 +238,36 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
   admin credential or a temporary account for future write smoke tests.
 - Setup and route access rules are documented in `services/api/README.md`.
 
+### 13. Inventory Backoffice Interface (Milestone 5.2)
+
+- The four protected UI routes are `/inventory/products`,
+  `/inventory/orders/inbound`, `/inventory/orders/outbound`, and
+  `/inventory/orders`; protection comes from the existing root layout auth
+  script, which covers all routes except the explicit auth pages.
+- `uis/backoffice/lib/inventory.ts` is the only inventory API integration point.
+  It reads `NEXT_PUBLIC_INVENTORY_API_URL` (fallback: existing API base), adds
+  the `Authorization: Bearer` token from `trackflow_access_token`, handles 401
+  by clearing the token and redirecting, and validates response payloads.
+  Components do not call `fetch` directly.
+- The product list displays computed stock by warehouse and links into
+  preselected movement forms. Outbound selection fetches the individual SKU to
+  show fresh stock before quantity entry; an over-stock warning is advisory and
+  API rejection remains authoritative. Movement history is read-only and shows
+  nested SKU data, entry/exit type, quantity, timestamp, and `user_uuid`.
+- Stock visual thresholds are currently 0 = out, 1–9 = low, 10+ = healthy. They
+  are documented next to the CSS rules and should be replaced with per-SKU
+  reorder points if operations defines them.
+- `uis/backoffice/.env.local` sets `NEXT_PUBLIC_INVENTORY_API_URL` to local API
+  origin. This public environment variable is embedded at build time; restart the
+  dev server or rebuild after changes. Root `.env.example` has a non-secret local
+  placeholder.
+- The shared HTTP safe-message validator permits only inventory oversell errors
+  matching the expected SKU/integer format. Do not expose arbitrary response
+  details. Tests cover that safe format and reject malformed details.
+- Backoffice Jest: 32 tests in 4 suites, inventory client 88.88% statements,
+  aggregate 87.74%. `npm run typecheck` and `npm run build` pass. Build changed
+  `tsconfig.json` to the required `jsx: preserve` setting.
+
 ## Feedback-related status
 
 - Website section parity issue: resolved in `uis/website`.

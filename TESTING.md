@@ -193,7 +193,8 @@ Each function gets at least one happy-path and one failure-mode test.
   `requestJson` parses valid JSON.
 - **Failure mode:** network error → `RequestError` with a safe, connection-focused
   message (no internal details); 401/5xx map to friendly messages; unreadable JSON
-  → `RequestError`.
+  → `RequestError`. The inventory oversell message is surfaced only when its SKU
+  and quantity fields match the expected safe format; malformed details stay generic.
 
 ### 4.3 `lib/incidents.ts` — incident response parser
 
@@ -201,6 +202,21 @@ Each function gets at least one happy-path and one failure-mode test.
   object / list.
 - **Failure mode:** the validator rejects malformed payloads (missing `id`, wrong
   field types), so `apiFetch` refuses incomplete data.
+
+### 4.4 `lib/inventory.ts` — inventory API integration
+
+- **Happy path:** product listing, SKU detail/create, inbound/outbound movement
+  writes, and order history use the configured inventory API URL and attach the
+  stored Bearer token from `trackflow_access_token`.
+- **Failure mode:** malformed product responses are rejected; shared request
+  handling returns readable service/validation errors and redirects expired
+  sessions to login. Inventory page components do not call `fetch` directly.
+- Backoffice config: `uis/backoffice/.env.local` sets
+  `NEXT_PUBLIC_INVENTORY_API_URL=http://localhost:8000` for local work. The value
+  is baked into production builds; restart/rebuild after changing it.
+- The four protected routes are `/inventory/products`,
+  `/inventory/orders/inbound`, `/inventory/orders/outbound`, and
+  `/inventory/orders`.
 
 ---
 
@@ -302,17 +318,16 @@ full run):
 
 ```
 File                | % Stmts | % Branch | % Funcs | % Lines
-packages/shared/http.ts    |   85.45 |    66.1  |   100   |  89.47
+packages/shared/http.ts    |   89.28 |    77.58 |   100   |  92.30
 uis/backoffice/lib/auth.ts |   79.54 |    61.53 |  66.66  |  81.08
 uis/backoffice/lib/incidents.ts |  100  |   95.83 |   100   |  100
-All files                  |   85.59 |    72.91 |  85.29  |  86.74
+uis/backoffice/lib/inventory.ts | 88.88 | 90.00 | 100 | 88.88
+All files                  |   87.74 |    83.87 |  90.38 |  88.33
 ```
 
-FE-019 requires one happy-path + one failure-mode test per function — all 25
-tests pass across 3 suites. `incidents.ts` is fully covered; `http.ts` and
-`auth.ts` have healthy branch coverage, with the remaining gaps being defensive
-branches (e.g. `SAFE_MESSAGES` fallback mappings) that are intentionally
-unreachable from the exercised inputs.
+All **32 tests pass across 4 suites**. The inventory API client has 88.88%
+statement coverage; `incidents.ts` remains fully covered. `http.ts` and `auth.ts`
+retain their safe-error and session-handling coverage.
 
 ---
 
@@ -338,6 +353,9 @@ uis/backoffice/
     auth-utils.test.ts             ← FE-019 token storage helpers
     http-client.test.ts            ← FE-019 shared http client
     incidents-utils.test.ts        ← FE-019 incident response parser
+    inventory.test.ts              ← inventory API client + Bearer header
+  lib/inventory.ts                 ← centralized inventory API integration
+  app/inventory/                    ← products, inbound, outbound, order history
 ```
 
 ### Test counts
@@ -347,4 +365,4 @@ uis/backoffice/
 | Auth (AUTH-088) | `uv run pytest tests/test_auth_token.py tests/test_auth_password.py tests/test_auth_endpoints.py` | 51 |
 | Backoffice endpoints (API-042) | `uv run pytest tests/test_users_api.py tests/test_profiles_api.py tests/test_suppliers_api.py` | 56 |
 | Backend total (incl. pre-existing) | `uv run pytest` | **152 passed** |
-| Frontend utilities (FE-019) | `npx jest --coverage` (in `uis/backoffice`) | **25 passed** |
+| Frontend utilities + inventory client | `npx jest --coverage` (in `uis/backoffice`) | **32 passed** |

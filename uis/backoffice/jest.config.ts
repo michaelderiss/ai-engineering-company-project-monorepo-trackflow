@@ -30,6 +30,7 @@ const config: Config = {
   collectCoverageFrom: [
     "uis/backoffice/lib/auth.ts",
     "uis/backoffice/lib/incidents.ts",
+    "uis/backoffice/lib/inventory.ts",
     "packages/shared/http.ts",
   ],
   clearMocks: true,
