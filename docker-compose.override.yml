@@ -1,0 +1,40 @@
+# ======================================================================
+# TrackFlow monorepo — Docker Compose DEVELOPMENT override
+#
+# Automatically loaded by `docker compose up` (no -f needed). Adds what
+# development needs on top of the production-oriented base:
+#
+#   api  → bind-mount the repo + uvicorn --reload (hot reload)
+#   ui   → bind-mount the repo + anonymous node_modules volumes
+#          (preserve Linux-compiled binaries), TRACKFLOW_UI_MODE=dev
+#
+# Production deployments intentionally do NOT load this file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ======================================================================
+
+services:
+
+  api:
+    # Bind-mount the whole repo so API edits hot-reload
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      # Preserve .venv from the host so the container does not need
+      # to re-install on every restart
+      - /app/.venv/
+    environment:
+      - UVICORN_RELOAD=true
+    # Reload the api on file changes (dev only)
+
+  ui:
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      # Preserve installed node_modules so the host OS does not shadow
+      # the Linux-compiled binaries
+      - /app/uis/backoffice/node_modules/
+      - /app/uis/website/node_modules/
+    environment:
+      - TRACKFLOW_UI_MODE=dev

@@ -9,12 +9,12 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 #     up -d --build
 #
-# What this overlay does:
-#   1. Removes development bind-mounts — the image is self-contained.
-#   2. UI: runs TRACKFLOW_UI_MODE=prod so start.sh does
-#      `npm run build && npm run start` (Next.js standalone server).
-#   3. API: disables uvicorn --reload (UVICORN_RELOAD=false).
-#   4. Sets restart: always for production resilience.
+# The base docker-compose.yml is already production-oriented (no dev
+# bind-mounts, TRACKFLOW_UI_MODE=prod, UVICORN_RELOAD=false by
+# default). This overlay guarantees those production settings are
+# explicit and sets restart: always. It is used in place of the
+# auto-loaded docker-compose.override.yml so the dev bind-mounts /
+# hot-reload never reach production.
 #
 # Prerequisites (VPS only — never in Git):
 #   - A `.env` file at the repo root with DATABASE_URL, JWT_SECRET_KEY,
@@ -31,7 +31,9 @@ services:
     build:
       context: .
       dockerfile: services/Dockerfile
-    volumes: []                    # no bind-mounts in production
+    # Only the named persistent data volume (no bind-mounts).
+    volumes:
+      - trackflow-api-data:/app/services/api/data/
     env_file:
       - .env
     environment:
@@ -47,7 +49,9 @@ services:
     build:
       context: .
       dockerfile: uis/Dockerfile
-    volumes: []
+    volumes:
+      - /app/uis/website/node_modules/
+      - /app/uis/backoffice/node_modules/
     env_file:
       - .env
     environment:
@@ -58,8 +62,4 @@ services:
       - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://api:8000}
       - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-}
       - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-}
-    depends_on:
-      api:
-        condition: service_healthy
     restart: always

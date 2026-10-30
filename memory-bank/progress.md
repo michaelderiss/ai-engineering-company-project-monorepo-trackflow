@@ -16,14 +16,22 @@
   `--reload` by default.
 - **`services/.dockerignore`**: excludes `__pycache__/`, `*.pyc`, `tests/`, `*.log`,
   `.env*`, data dirs, `.venv`.
-- **`docker-compose.yml`**: TWO services (`api`, `ui`) on a named `trackflow`
-  bridge network. The `ui` container runs both Next.js apps (website :3000,
-  backoffice :3001) via `start.sh`. Source code is bind-mounted for hot reload.
-  `node_modules` and `.venv` preserved via anonymous volumes. API healthcheck
-  gates UI startup. Environment via root `.env` file.
-- **`docker-compose.prod.yml`**: Production overlay removing bind-mounts, setting
-  `TRACKFLOW_UI_MODE=prod` (build + start), disabling uvicorn `--reload`, restart:
-  always.
+- **`docker-compose.yml`** (BASE — production-oriented): TWO services (`api`, `ui`)
+  on a named `trackflow` bridge network. The `ui` container runs both Next.js apps
+  (website :3000, backoffice :3001) via `start.sh`. The base has NO dev bind-mounts
+  (image is self-contained), `TRACKFLOW_UI_MODE=prod` / `UVICORN_RELOAD=false` by
+  default, an api healthcheck gates UI startup, and a named `trackflow-api-data`
+  volume persists TinyDB/SQLite. Environment via root `.env` file.
+- **`docker-compose.override.yml`** (DEV overlay — auto-loaded by `docker compose up`):
+  Docker Compose cannot remove a base bind-mount via an overlay `volumes: []`
+  (sequence-of-maps volumes merge by type+source), so dev-only mounts/hot-reload
+  must live in a SEPARATE overlay file. This one adds the repo bind-mount to both
+  services, anonymous `.venv`/`node_modules` volumes, `UVICORN_RELOAD=true`, and
+  `TRACKFLOW_UI_MODE=dev`.
+- **`docker-compose.prod.yml`** (thin PROD overlay): makes production settings
+  explicit (`TRACKFLOW_UI_MODE=prod`, `UVICORN_RELOAD=false`, no bind-mounts,
+  anonymous node_modules volumes, `restart: always`). Used instead of the override:
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
 - **Inter-service communication**: the UI container reaches the API by Docker
   service name `api` (`BACKEND_UPSTREAM=http://api:8000`) — never `localhost`.
   The Next.js server proxies `/api`, `/auth`, `/users`, `/profiles` via rewrites

@@ -1,18 +1,23 @@
 # ======================================================================
-# TrackFlow monorepo — Docker Compose (development)
+# TrackFlow monorepo — Docker Compose (base / production definition)
 #
-# Quick start:
-#   1. cp .env.docker .env         # or fill .env with your own values
-#   2. docker compose up --build   # builds and starts both services
+# Quick start (development — hot reload):
+#   1. cp .env.docker .env          # or fill .env with your own values
+#   2. docker compose up --build    # auto-loads docker-compose.override.yml
 #   3. Open in browser:
 #        Public website:  http://localhost:3000
 #        Backoffice:      http://localhost:3001
 #        API health:      http://localhost:8000/health
 #
+# Development (`docker compose up`) auto-loads `docker-compose.override.yml`,
+# which adds bind-mounts + hot reload. To run WITHOUT the dev override
+# (production-like), use:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
 # Two services:
 #   ui   → ONE container running BOTH Next.js apps (website :3000,
-#          backoffice :3001) via uis/start.sh. Hot reload in dev.
-#   api  → FastAPI backend (:8000) with uvicorn --reload.
+#          backoffice :3001) via uis/start.sh. One image.
+#   api  → FastAPI backend (:8000).
 #
 # Inter-service communication:
 #   The UI container reaches the API by the Docker service name `api`
@@ -42,20 +47,16 @@ services:
     env_file:
       - .env
     environment:
-      - UVICORN_RELOAD=${UVICORN_RELOAD:-true}
-    # Development: bind-mount the repo for hot reload
+      - UVICORN_RELOAD=${UVICORN_RELOAD:-false}
+    # Production-oriented default: the image is self-contained (no bind
+    # mount). The dev override (docker-compose.override.yml) adds the
+    # bind mount + --reload.
     volumes:
-      - type: bind
-        source: .
-        target: /app
-      # Preserve .venv from the host so the container does not need
-      # to re-install on every restart
-      - /app/.venv/
       # Persist TinyDB + SQLite databases across restarts
       - trackflow-api-data:/app/services/api/data/
     command: >
       sh -c '
-        if [ "${UVICORN_RELOAD:-true}" = "true" ]; then
+        if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
           exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload;
         else
           exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000;
@@ -85,7 +86,7 @@ services:
     env_file:
       - .env
     environment:
-      - TRACKFLOW_UI_MODE=${TRACKFLOW_UI_MODE:-dev}
+      - TRACKFLOW_UI_MODE=${TRACKFLOW_UI_MODE:-prod}
       - WEBSITE_PORT=${WEBSITE_PORT:-3000}
       - BACKOFFICE_PORT=${BACKOFFICE_PORT:-3001}
       # Inter-service upstream: Docker service name `api`, resolved over
@@ -98,14 +99,8 @@ services:
       # the API at a public domain instead.
       - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-}
       - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-}
-    volumes:
-      - type: bind
-        source: .
-        target: /app
-      # Preserve installed node_modules so the host OS does not shadow
-      # the Linux-compiled binaries
-      - /app/uis/backoffice/node_modules/
-      - /app/uis/website/node_modules/
+    # No bind-mount in the base definition (image is self-contained).
+    # The dev override adds bind-mounts + node_modules volumes.
     command: ["sh", "/app/uis/start.sh"]
     depends_on:
       api:
