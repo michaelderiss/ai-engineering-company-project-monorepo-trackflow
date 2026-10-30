@@ -1,0 +1,89 @@
+# ======================================================================
+# TrackFlow monorepo — Docker Compose PRODUCTION overlay
+#
+# Usage (build then deploy):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Or build-and-deploy in one step on the VPS:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     up -d --build
+#
+# What this overlay does:
+#   1. Removes development bind-mounts — the image is self-contained.
+#   2. Runs `npm run build && npm run start` so the Next.js standalone
+#      server serves pre-built output (with NEXT_PUBLIC_* baked in).
+#   3. Disables uvicorn --reload.
+#   4. Sets restart: always for production resilience.
+#
+# Prerequisites:
+#   - A `.env` file at the repo root with DATABASE_URL, JWT_SECRET_KEY,
+#     RESEND_API_KEY, etc.
+#   - For Docker deployments, NEXT_PUBLIC_INCIDENTS_API_BASE_URL and
+#     NEXT_PUBLIC_INVENTORY_API_URL should point to the Docker service
+#     name (e.g. http://api:8000) — set these in .env before building.
+# ======================================================================
+
+services:
+
+  api:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    volumes: []                    # no bind-mounts in production
+    env_file:
+      - .env
+    environment:
+      - UVICORN_RELOAD=false
+      # CORS: comma-separated list of allowed origins for the browser.
+      # Set CORS_ORIGINS in .env for production domains; falls back
+      # to localhost defaults (safe for same-host testing).
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+    command: >
+      uvicorn services.api.main:app --host 0.0.0.0 --port 8000
+    restart: always
+
+  ui-backoffice:
+    build:
+      context: .
+      dockerfile: uis/Dockerfile
+    volumes: []
+    env_file:
+      - .env
+    environment:
+      # NEXT_PUBLIC_* vars are read by `npm run build` (Next.js bakes
+      # them into JS that runs in the browser).  In production the
+      # browser connects to the API via a public domain name, so set
+      # these in .env (e.g. https://api.trackflow.com).
+      # The fallback localhost works for same-host testing only.
+      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-http://localhost:8000}
+      - BACKOFFICE_URL=${BACKOFFICE_URL:-http://localhost:3000}
+    depends_on:
+      api:
+        condition: service_healthy
+    # Build and serve: `npm run build` reads the env vars above,
+    # `npm run start` serves the pre-built output on port 3000.
+    command: >
+      sh -c "
+        npm --prefix uis/backoffice run build &&
+        npm --prefix uis/backoffice run start
+      "
+    restart: always
+
+  ui-website:
+    build:
+      context: .
+      dockerfile: uis/Dockerfile
+    volumes: []
+    env_file:
+      - .env
+    depends_on:
+      api:
+        condition: service_healthy
+    command: >
+      sh -c "
+        npm --prefix uis/website run build &&
+        npm --prefix uis/website run start
+      "
+    restart: always

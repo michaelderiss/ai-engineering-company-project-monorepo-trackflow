@@ -1,0 +1,136 @@
+# ======================================================================
+# TrackFlow monorepo — Docker Compose (development)
+#
+# Quick start:
+#   1. cp .env.docker .env         # or fill .env with your own values
+#   2. docker compose build        # optional, done automatically by up
+#   3. docker compose up           # starts all 3 services
+#   4. docker compose down         # stops all services
+#
+# Services:
+#   api            FastAPI backend                        → :8000
+#   ui-backoffice  Next.js backoffice (admin)             → :3000
+#   ui-website     Next.js public website                 → :3001
+#
+# All services share a `trackflow` network. The UI containers
+# resolve the API via the Docker DNS name `api`.
+#
+# Environment: compose loads the root `.env` file automatically.
+#   Use `.env.docker` as a starting point (SQLite, no Postgres needed).
+#
+# Production deployment:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ======================================================================
+
+services:
+
+  # ------------------------------------------------------------------
+  # FastAPI backend — TrackFlow API
+  # ------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: trackflow-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - UVICORN_RELOAD=${UVICORN_RELOAD:-true}
+    # Development: bind-mount the repo for hot reload
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      # Preserve .venv from the host so the container does not need
+      # to re-pip install on every restart
+      - /app/.venv/
+      # Persist TinyDB + SQLite databases across restarts
+      - trackflow-api-data:/app/services/api/data/
+    # Start with hot reload in dev (override in .env or compose overlay)
+    command: >
+      sh -c '
+        if [ "${UVICORN_RELOAD:-true}" = "true" ]; then
+          exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload;
+        else
+          exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000;
+        fi
+      '
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Backoffice UI — Next.js admin app (port 3000)
+  # ------------------------------------------------------------------
+  ui-backoffice:
+    build:
+      context: .
+      dockerfile: uis/Dockerfile
+    container_name: trackflow-backoffice
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # NEXT_PUBLIC_* vars are baked into client-side JavaScript that
+      # runs in the user's browser ON THE HOST.  Since the API port
+      # is mapped to localhost:8000, use that — the browser cannot
+      # resolve the Docker service name "api".
+      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=http://localhost:8000
+      - NEXT_PUBLIC_INVENTORY_API_URL=http://localhost:8000
+      - BACKOFFICE_URL=http://localhost:3000
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      # Preserve installed node_modules so the host OS does not shadow
+      # the Linux-compiled binaries with Windows/macOS versions
+      - /app/uis/backoffice/node_modules/
+      - /app/uis/website/node_modules/
+    command: ["npm", "--prefix", "uis/backoffice", "run", "dev"]
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # Public Website — Next.js public app (port 3001)
+  # ------------------------------------------------------------------
+  ui-website:
+    build:
+      context: .
+      dockerfile: uis/Dockerfile
+    container_name: trackflow-website
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    environment:
+      - BACKOFFICE_URL=http://localhost:3000
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      - /app/uis/backoffice/node_modules/
+      - /app/uis/website/node_modules/
+    command: ["npm", "--prefix", "uis/website", "run", "dev"]
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+volumes:
+  trackflow-api-data:
+
+networks:
+  trackflow:
+    driver: bridge

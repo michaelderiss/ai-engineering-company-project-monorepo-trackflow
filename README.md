@@ -69,6 +69,104 @@ ai-engineering-project-template/
 
 ---
 
+## Docker Development (INFRA-40)
+
+The entire monorepo can be run with Docker Compose for consistent development environments
+and production deployment to a VPS.
+
+### Quick Start (Development)
+
+```bash
+# 1. Create environment (SQLite — no external Postgres needed)
+cp .env.docker .env
+
+# 2. Build and start all services
+docker compose up --build
+
+# 3. Open in browser
+#    Backoffice: http://localhost:3000
+#    Website:    http://localhost:3001
+#    API health: http://localhost:8000/health
+```
+
+Three services start:
+| Service       | Container          | Port  | Tech              | Hot reload |
+|---------------|--------------------|-------|--------------------|------------|
+| API           | `trackflow-api`    | 8000  | FastAPI + uvicorn  | ✅ `--reload` |
+| Backoffice    | `trackflow-backoffice` | 3000  | Next.js 15         | ✅ dev server |
+| Public website | `trackflow-website` | 3001  | Next.js 16         | ✅ dev server |
+
+All source directories are bind-mounted for instant edit-refresh. `node_modules`
+and `.venv` are preserved via anonymous Docker volumes so the host OS does not
+shadow Linux-compiled binaries.
+
+### Production Deployment (VPS)
+
+```bash
+# On your VPS:
+git clone <repo-url> /opt/trackflow
+cd /opt/trackflow
+
+# Configure with real production secrets
+cp .env.docker .env
+# Edit .env:
+#   - JWT_SECRET_KEY (run: openssl rand -hex 32)
+#   - DATABASE_URL   (real Supabase Postgres URL)
+#   - RESEND_API_KEY / RESEND_FROM_EMAIL
+#   - NEXT_PUBLIC_INCIDENTS_API_BASE_URL (public domain or IP)
+#   - NEXT_PUBLIC_INVENTORY_API_URL (public domain or IP)
+
+# Deploy
+bash scripts/deploy.sh
+```
+
+Or manually:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+The production overlay:
+- Removes all bind-mounts (self-contained images)
+- Runs `npm run build && npm run start` (Next.js standalone server)
+- Uses `restart: always` for resilience
+- Disables uvicorn `--reload`
+
+### Architecture
+
+```mermaid
+graph TD
+    subgraph "Docker Compose — trackflow network"
+        API["api:8000<br/>(FastAPI)"]
+        BO["ui-backoffice:3000<br/>(Next.js 15)"]
+        WS["ui-website:3001<br/>(Next.js 16)"]
+    end
+
+    BO -->|"http://api:8000"| API
+    WS -->|"http://api:8000"| API
+    BROWSER["Browser"] --> BO
+    BROWSER --> WS
+```
+
+The UI containers resolve the API via the Docker DNS name `api` (not `localhost`),
+enabling inter-container communication without host networking.
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `uis/Dockerfile` | Node.js 22 image for both Next.js apps |
+| `uis/.dockerignore` | Excludes node_modules/.next from build context |
+| `services/Dockerfile` | Python 3.12 slim image for FastAPI |
+| `services/.dockerignore` | Excludes __pycache__/data/.venv |
+| `docker-compose.yml` | Dev compose: bind-mounts, reload, healthcheck |
+| `docker-compose.prod.yml` | Prod overlay: no mounts, build+start, always restart |
+| `.env.docker` | Ready-to-use dev environment (SQLite, dummy secrets) |
+| `.dockerignore` | Root-level context filter |
+| `scripts/deploy.sh` | One-command VPS deploy |
+
+---
+
 ## Links
 
 - [4Geeks Academy — AI Engineering](https://4geeksacademy.com/es/programas-de-carrera/ingenieria-ia)

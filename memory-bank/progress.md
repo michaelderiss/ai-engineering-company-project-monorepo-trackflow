@@ -2,6 +2,43 @@
 
 ## Completed
 
+## INFRA-40 — Dockerization & Production Deploy
+
+- Dockerized the entire monorepo for reproducible development environments.
+- **`uis/Dockerfile`**: Node 22-alpine image installing deps for both Next.js apps
+  via `npm ci`. Exposes ports 3000/3001. Default CMD runs `npm run dev` for
+  backoffice; overridden in compose for website.
+- **`uis/.dockerignore`**: excludes `node_modules/`, `.next/`, `out/`.
+- **`services/Dockerfile`**: Python 3.12-slim image installing FastAPI deps from
+  `requirements.txt`. Exposes port 8000. Uses `uvicorn --reload` in development.
+- **`services/.dockerignore`**: excludes `__pycache__/`, `*.pyc`, data dirs, `.venv`.
+- **`docker-compose.yml`**: Three services (`api`, `ui-backoffice`, `ui-website`)
+  on a named `trackflow` bridge network. Source code is bind-mounted for hot
+  reload. `node_modules` and `.venv` preserved via anonymous volumes. API
+  healthcheck gates frontend startup. Environment via root `.env` file.
+- **`docker-compose.prod.yml`**: Production overlay removing bind-mounts, running
+  `npm run build && npm run start` for Next.js apps, disabling uvicorn `--reload`,
+  and setting `restart: always`.
+- **`.env.docker`**: Ready-to-use dev environment using SQLite (no external
+  Postgres needed). Authored as a committed template (exempted from `.gitignore`).
+- **`.dockerignore`** (root): Filters out `.venv`, `node_modules`, `.next`, cache
+  files, and documentation directories from the Docker build context.
+- **`scripts/deploy.sh`**: One-command VPS deploy script pulling latest code,
+  building production images, and starting services.
+- Inter-service communication: UI containers resolve the API via Docker DNS name
+  `api` (not `localhost`). However, `NEXT_PUBLIC_*` vars are baked into client-side
+  JS that runs in the user's browser — the browser cannot resolve Docker service
+  names.  Therefore in dev these vars point to `http://localhost:8000` (the host
+  port mapping), and in production they must point to a public domain.
+- CORS middleware in `services/api/main.py` refactored: uses env var
+  `CORS_ORIGINS` (comma-separated) for production; falls back to localhost
+  defaults for dev. Inter-container calls (Docker DNS) bypass CORS entirely
+  because they are server-side, not browser requests.
+- No secrets in versioned files: `.env` is git-ignored, all secrets go in
+  environment or `.env` on the VPS. `.env.docker` contains only dev defaults.
+- README updated with Docker quick-start, production deploy, and architecture
+  diagram sections.
+
 ## Milestone 5 — Backend Inventory Management
 
 - Added the inventory API to the existing `services/api` FastAPI application;

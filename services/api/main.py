@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 from io import StringIO
 from pathlib import Path
 import sys
@@ -36,14 +37,32 @@ from services.api.routes.inventory import router as inventory_router  # noqa: E4
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
 
+# ------------------------------------------------------------------
+# CORS origins
+#
+# Development defaults: both Next.js apps on localhost.
+# Override via CORS_ORIGINS env var in production — comma-separated
+# list of origins (e.g. "https://admin.trackflow.com,https://trackflow.com").
+# The Docker service name "api" does NOT need to be listed here
+# because inter-container calls do not go through the browser CORS
+# policy.
+# ------------------------------------------------------------------
+_default_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+_cors_str = os.environ.get("CORS_ORIGINS", "")
+_cors_origins = (
+    [origin.strip() for origin in _cors_str.split(",") if origin.strip()]
+    if _cors_str
+    else _default_origins
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
