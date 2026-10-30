@@ -46,6 +46,9 @@
   building production images, and starting services.
 - No secrets in versioned files: `.env` is git-ignored, all secrets go in
   environment or `.env` on the VPS. `.env.docker` contains only dev defaults.
+- **PR evidence**: live screenshots of the local dev stack and the VPS
+  production stack (compose ps + running apps) are captured under
+  `docs/screenshots/INFRA-40/` for the PR description.
 
 ## Milestone 5 — Backend Inventory Management
 
