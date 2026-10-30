@@ -1,35 +1,57 @@
 #!/bin/sh
 # ======================================================================
-# TrackFlow UI development start script
+# TrackFlow UI start script
 #
-# Runs both Next.js development servers in parallel inside one container.
+# Starts BOTH Next.js applications inside ONE container:
+#   - website   → :3000 (default, override WEBSITE_PORT)
+#   - backoffice → :3001 (default, override BACKOFFICE_PORT)
+#
+# Development (default, docker compose up):
+#   Runs `next dev` for both apps — hot reload, bind mount edits are
+#   reflected in the browser without rebuilding the image.
+#
+# Production (TRACKFLOW_UI_MODE=prod):
+#   Runs `next build && next start` for both apps first.
+#
 # Uses trap for clean shutdown on SIGTERM/SIGINT.
-#
-# For production deployments, use the separate `docker compose -f
-# docker-compose.prod.yml` which builds and serves each app individually.
 # ======================================================================
 
 set -e
 
-BACKOFFICE_PORT="${BACKOFFICE_PORT:-3000}"
-WEBSITE_PORT="${WEBSITE_PORT:-3001}"
+MODE="${TRACKFLOW_UI_MODE:-dev}"
+WEBSITE_PORT="${WEBSITE_PORT:-3000}"
+BACKOFFICE_PORT="${BACKOFFICE_PORT:-3001}"
 
-echo "==> Starting backoffice on port ${BACKOFFICE_PORT} ..."
-npm --prefix uis/backoffice run dev -- -p "${BACKOFFICE_PORT}" &
-BACKOFFICE_PID=$!
+echo "==> TrackFlow UI (mode: ${MODE})"
 
-echo "==> Starting website on port ${WEBSITE_PORT} ..."
-npm --prefix uis/website run dev -- -p "${WEBSITE_PORT}" &
-WEBSITE_PID=$!
+if [ "${MODE}" = "prod" ]; then
+  echo "==> Building website..."
+  npm --prefix uis/website run build
+  echo "==> Building backoffice..."
+  npm --prefix uis/backoffice run build
+  echo "==> Starting website (prod) on ${WEBSITE_PORT}..."
+  npm --prefix uis/website run start -- -p "${WEBSITE_PORT}" &
+  WEBSITE_PID=$!
+  echo "==> Starting backoffice (prod) on ${BACKOFFICE_PORT}..."
+  npm --prefix uis/backoffice run start -- -p "${BACKOFFICE_PORT}" &
+  BACKOFFICE_PID=$!
+else
+  echo "==> Starting website (dev) on ${WEBSITE_PORT}..."
+  npm --prefix uis/website run dev -- -p "${WEBSITE_PORT}" &
+  WEBSITE_PID=$!
+  echo "==> Starting backoffice (dev) on ${BACKOFFICE_PORT}..."
+  npm --prefix uis/backoffice run dev -- -p "${BACKOFFICE_PORT}" &
+  BACKOFFICE_PID=$!
+fi
 
 # Trap for clean shutdown
 cleanup() {
     echo "==> Shutting down..."
-    kill "$BACKOFFICE_PID" "$WEBSITE_PID" 2>/dev/null
-    wait "$BACKOFFICE_PID" "$WEBSITE_PID" 2>/dev/null
+    kill "$WEBSITE_PID" "$BACKOFFICE_PID" 2>/dev/null || true
+    wait "$WEBSITE_PID" "$BACKOFFICE_PID" 2>/dev/null || true
     echo "==> Done."
 }
 trap cleanup INT TERM
 
-echo "==> Both UI servers running. Press Ctrl+C to stop."
+echo "==> Both UI apps running. Press Ctrl+C to stop."
 wait

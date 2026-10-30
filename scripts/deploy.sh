@@ -13,13 +13,15 @@
 #      - JWT_SECRET_KEY (generate: openssl rand -hex 32)
 #      - DATABASE_URL  (real Supabase Postgres URL)
 #      - RESEND_API_KEY / RESEND_FROM_EMAIL
-#      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL (public domain or IP)
-#      - NEXT_PUBLIC_INVENTORY_API_URL (public domain or IP)
+#      - CORS_ORIGINS  (public domain or IP where the UIs are served)
+#      - TRACKFLOW_UI_MODE=prod  (build+serve instead of dev hot reload)
+#      - BACKEND_UPSTREAM  (defaults to http://api:8000 — service name
+#        inside the Docker network; no localhost required)
 #   5. Run this deploy script
 #
 # What this script does:
 #   - Pulls the latest code
-#   - Builds production Docker images (with NEXT_PUBLIC_* baked in)
+#   - Builds production Docker images
 #   - Starts all services in detached mode
 #   - Shows service status
 # ======================================================================
@@ -60,8 +62,8 @@ echo "========================================"
 echo "  Deploy complete!"
 echo ""
 echo "  API:         http://$(hostname -I | awk '{print $1}'):8000/health"
-echo "  Backoffice:  http://$(hostname -I | awk '{print $1}'):3000"
-echo "  Website:     http://$(hostname -I | awk '{print $1}'):3001"
+echo "  Backoffice:  http://$(hostname -I | awk '{print $1}'):3001"
+echo "  Website:     http://$(hostname -I | awk '{print $1}'):3000"
 echo ""
 echo "  Logs:        ${COMPOSE_CMD} logs -f"
 echo "  Restart:     ${COMPOSE_CMD} restart"

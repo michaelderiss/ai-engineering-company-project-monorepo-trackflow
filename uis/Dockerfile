@@ -37,5 +37,14 @@ COPY . .
 
 EXPOSE 3000 3001
 
-# Default: backoffice dev server (overridden in compose for website)
-CMD ["npm", "--prefix", "uis/backoffice", "run", "dev"]
+# ------------------------------------------------------------------
+# 4. Default command: start.sh runs BOTH Next.js apps in one container
+#      website   → :3000 (default)
+#      backoffice → :3001 (default)
+#    In production (TRACKFLOW_UI_MODE=prod) it builds then serves,
+#    otherwise it runs `next dev` for hot reload.
+#    Note: we invoke it via `sh` so the node image entrypoint does not
+#    try to run the script as JavaScript.
+# ------------------------------------------------------------------
+RUN chmod +x /app/uis/start.sh
+CMD ["sh", "/app/uis/start.sh"]

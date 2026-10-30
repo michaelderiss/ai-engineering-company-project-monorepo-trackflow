@@ -3,29 +3,34 @@
 #
 # Quick start:
 #   1. cp .env.docker .env         # or fill .env with your own values
-#   2. docker compose build        # optional, done automatically by up
-#   3. docker compose up           # starts all 3 services
-#   4. docker compose down         # stops all services
+#   2. docker compose up --build   # builds and starts both services
+#   3. Open in browser:
+#        Public website:  http://localhost:3000
+#        Backoffice:      http://localhost:3001
+#        API health:      http://localhost:8000/health
 #
-# Services:
-#   api            FastAPI backend                        → :8000
-#   ui-backoffice  Next.js backoffice (admin)             → :3000
-#   ui-website     Next.js public website                 → :3001
+# Two services:
+#   ui   → ONE container running BOTH Next.js apps (website :3000,
+#          backoffice :3001) via uis/start.sh. Hot reload in dev.
+#   api  → FastAPI backend (:8000) with uvicorn --reload.
 #
-# All services share a `trackflow` network. The UI containers
-# resolve the API via the Docker DNS name `api`.
+# Inter-service communication:
+#   The UI container reaches the API by the Docker service name `api`
+#   (BACKEND_UPSTREAM=http://api:8000). The Next.js server proxies
+#   /api, /auth, /inventory, ... to api:8000 over the `trackflow`
+#   network — never localhost.
 #
 # Environment: compose loads the root `.env` file automatically.
 #   Use `.env.docker` as a starting point (SQLite, no Postgres needed).
-#
-# Production deployment:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   No secrets are hardcoded here — everything comes from .env.
 # ======================================================================
+
+name: trackflow
 
 services:
 
   # ------------------------------------------------------------------
-  # FastAPI backend — TrackFlow API
+  # FastAPI backend — TrackFlow API (:8000)
   # ------------------------------------------------------------------
   api:
     build:
@@ -33,7 +38,7 @@ services:
       dockerfile: services/Dockerfile
     container_name: trackflow-api
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     env_file:
       - .env
     environment:
@@ -44,11 +49,10 @@ services:
         source: .
         target: /app
       # Preserve .venv from the host so the container does not need
-      # to re-pip install on every restart
+      # to re-install on every restart
       - /app/.venv/
       # Persist TinyDB + SQLite databases across restarts
       - trackflow-api-data:/app/services/api/data/
-    # Start with hot reload in dev (override in .env or compose overlay)
     command: >
       sh -c '
         if [ "${UVICORN_RELOAD:-true}" = "true" ]; then
@@ -68,62 +72,44 @@ services:
     restart: unless-stopped
 
   # ------------------------------------------------------------------
-  # Backoffice UI — Next.js admin app (port 3000)
+  # UI — one container with BOTH Next.js apps (website :3000, backoffice :3001)
   # ------------------------------------------------------------------
-  ui-backoffice:
+  ui:
     build:
       context: .
       dockerfile: uis/Dockerfile
-    container_name: trackflow-backoffice
+    container_name: trackflow-ui
     ports:
-      - "3000:3000"
+      - "${WEBSITE_PORT:-3000}:3000"
+      - "${BACKOFFICE_PORT:-3001}:3001"
     env_file:
       - .env
     environment:
-      # NEXT_PUBLIC_* vars are baked into client-side JavaScript that
-      # runs in the user's browser ON THE HOST.  Since the API port
-      # is mapped to localhost:8000, use that — the browser cannot
-      # resolve the Docker service name "api".
-      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=http://localhost:8000
-      - NEXT_PUBLIC_INVENTORY_API_URL=http://localhost:8000
-      - BACKOFFICE_URL=http://localhost:3000
+      - TRACKFLOW_UI_MODE=${TRACKFLOW_UI_MODE:-dev}
+      - WEBSITE_PORT=${WEBSITE_PORT:-3000}
+      - BACKOFFICE_PORT=${BACKOFFICE_PORT:-3001}
+      # Inter-service upstream: Docker service name `api`, resolved over
+      # the `trackflow` network by the Next.js server-side proxy.
+      - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://api:8000}
+      # NEXT_PUBLIC_* are baked into JS that runs in the BROWSER on the
+      # host. Left empty here so the browser uses relative /api, /auth...
+      # URLs against the UI origin; the Next.js server then proxies them
+      # to api:8000 by service name. Override in .env only if you serve
+      # the API at a public domain instead.
+      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-}
+      - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-}
     volumes:
       - type: bind
         source: .
         target: /app
       # Preserve installed node_modules so the host OS does not shadow
-      # the Linux-compiled binaries with Windows/macOS versions
+      # the Linux-compiled binaries
       - /app/uis/backoffice/node_modules/
       - /app/uis/website/node_modules/
-    command: ["npm", "--prefix", "uis/backoffice", "run", "dev"]
+    command: ["sh", "/app/uis/start.sh"]
     depends_on:
       api:
         condition: service_healthy
-    networks:
-      - trackflow
-    restart: unless-stopped
-
-  # ------------------------------------------------------------------
-  # Public Website — Next.js public app (port 3001)
-  # ------------------------------------------------------------------
-  ui-website:
-    build:
-      context: .
-      dockerfile: uis/Dockerfile
-    container_name: trackflow-website
-    ports:
-      - "3001:3000"
-    env_file:
-      - .env
-    environment:
-      - BACKOFFICE_URL=http://localhost:3000
-    volumes:
-      - type: bind
-        source: .
-        target: /app
-      - /app/uis/backoffice/node_modules/
-      - /app/uis/website/node_modules/
-    command: ["npm", "--prefix", "uis/website", "run", "dev"]
     networks:
       - trackflow
     restart: unless-stopped

@@ -4,7 +4,7 @@ export { RequestError, isObject } from "../../../packages/shared/http";
 const AUTH_TOKEN_KEY = "trackflow_access_token";
 
 export const API_BASE =
-  process.env.NEXT_PUBLIC_INCIDENTS_API_BASE_URL ?? "http://localhost:8000";
+  process.env.NEXT_PUBLIC_INCIDENTS_API_BASE_URL ?? "";
 
 export function getToken(): string | null {
   try {

@@ -5,39 +5,39 @@
 ## INFRA-40 — Dockerization & Production Deploy
 
 - Dockerized the entire monorepo for reproducible development environments.
-- **`uis/Dockerfile`**: Node 22-alpine image installing deps for both Next.js apps
-  via `npm ci`. Exposes ports 3000/3001. Default CMD runs `npm run dev` for
-  backoffice; overridden in compose for website.
-- **`uis/.dockerignore`**: excludes `node_modules/`, `.next/`, `out/`.
-- **`services/Dockerfile`**: Python 3.12-slim image installing FastAPI deps from
-  `requirements.txt`. Exposes port 8000. Uses `uvicorn --reload` in development.
-- **`services/.dockerignore`**: excludes `__pycache__/`, `*.pyc`, data dirs, `.venv`.
-- **`docker-compose.yml`**: Three services (`api`, `ui-backoffice`, `ui-website`)
-  on a named `trackflow` bridge network. Source code is bind-mounted for hot
-  reload. `node_modules` and `.venv` preserved via anonymous volumes. API
-  healthcheck gates frontend startup. Environment via root `.env` file.
-- **`docker-compose.prod.yml`**: Production overlay removing bind-mounts, running
-  `npm run build && npm run start` for Next.js apps, disabling uvicorn `--reload`,
-  and setting `restart: always`.
+- **`uis/Dockerfile`**: Node 22-alpine image installing deps for BOTH Next.js apps
+  via `npm ci`. Exposes ports 3000/3001. Default CMD is `uis/start.sh`.
+- **`uis/start.sh`**: Starts the public website (`:3000`) and the admin backoffice
+  (`:3001`) from ONE container. Dev mode runs `next dev` for both (hot reload);
+  `TRACKFLOW_UI_MODE=prod` runs `next build && next start`.
+- **`uis/.dockerignore`**: excludes `node_modules/`, `.next/`, `out/`, `.env*`, `*.log`.
+- **`services/Dockerfile`**: Python 3.12-slim image installing `uv` and deps from
+  `requirements.txt` via `uv pip install`. Exposes port 8000, runs uvicorn with
+  `--reload` by default.
+- **`services/.dockerignore`**: excludes `__pycache__/`, `*.pyc`, `tests/`, `*.log`,
+  `.env*`, data dirs, `.venv`.
+- **`docker-compose.yml`**: TWO services (`api`, `ui`) on a named `trackflow`
+  bridge network. The `ui` container runs both Next.js apps (website :3000,
+  backoffice :3001) via `start.sh`. Source code is bind-mounted for hot reload.
+  `node_modules` and `.venv` preserved via anonymous volumes. API healthcheck
+  gates UI startup. Environment via root `.env` file.
+- **`docker-compose.prod.yml`**: Production overlay removing bind-mounts, setting
+  `TRACKFLOW_UI_MODE=prod` (build + start), disabling uvicorn `--reload`, restart:
+  always.
+- **Inter-service communication**: the UI container reaches the API by Docker
+  service name `api` (`BACKEND_UPSTREAM=http://api:8000`) — never `localhost`.
+  The Next.js server proxies `/api`, `/auth`, `/users`, `/profiles` via rewrites
+  in `next.config.ts`, and `/inventory` + `/suppliers` via `middleware.ts`
+  (which only forwards API-shaped requests). Browser SPA calls use relative
+  paths; `NEXT_PUBLIC_*` are left blank in the proxy flow.
 - **`.env.docker`**: Ready-to-use dev environment using SQLite (no external
   Postgres needed). Authored as a committed template (exempted from `.gitignore`).
 - **`.dockerignore`** (root): Filters out `.venv`, `node_modules`, `.next`, cache
   files, and documentation directories from the Docker build context.
 - **`scripts/deploy.sh`**: One-command VPS deploy script pulling latest code,
   building production images, and starting services.
-- Inter-service communication: UI containers resolve the API via Docker DNS name
-  `api` (not `localhost`). However, `NEXT_PUBLIC_*` vars are baked into client-side
-  JS that runs in the user's browser — the browser cannot resolve Docker service
-  names.  Therefore in dev these vars point to `http://localhost:8000` (the host
-  port mapping), and in production they must point to a public domain.
-- CORS middleware in `services/api/main.py` refactored: uses env var
-  `CORS_ORIGINS` (comma-separated) for production; falls back to localhost
-  defaults for dev. Inter-container calls (Docker DNS) bypass CORS entirely
-  because they are server-side, not browser requests.
 - No secrets in versioned files: `.env` is git-ignored, all secrets go in
   environment or `.env` on the VPS. `.env.docker` contains only dev defaults.
-- README updated with Docker quick-start, production deploy, and architecture
-  diagram sections.
 
 ## Milestone 5 — Backend Inventory Management
 

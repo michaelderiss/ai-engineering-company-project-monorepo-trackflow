@@ -84,21 +84,22 @@ cp .env.docker .env
 docker compose up --build
 
 # 3. Open in browser
-#    Backoffice: http://localhost:3000
-#    Website:    http://localhost:3001
-#    API health: http://localhost:8000/health
+#    Public website: http://localhost:3000
+#    Backoffice:     http://localhost:3001
+#    API health:     http://localhost:8000/health
 ```
 
-Three services start:
-| Service       | Container          | Port  | Tech              | Hot reload |
-|---------------|--------------------|-------|--------------------|------------|
-| API           | `trackflow-api`    | 8000  | FastAPI + uvicorn  | ✅ `--reload` |
-| Backoffice    | `trackflow-backoffice` | 3000  | Next.js 15         | ✅ dev server |
-| Public website | `trackflow-website` | 3001  | Next.js 16         | ✅ dev server |
+Two services start:
+| Service | Container      | Ports | Tech              | Hot reload |
+|---------|----------------|-------|--------------------|------------|
+| API     | `trackflow-api`| 8000  | FastAPI + uvicorn  | ✅ `--reload` |
+| UI      | `trackflow-ui` | 3000, 3001 | Next.js 15 + 16 (both apps in ONE container) | ✅ `next dev` |
 
-All source directories are bind-mounted for instant edit-refresh. `node_modules`
-and `.venv` are preserved via anonymous Docker volumes so the host OS does not
-shadow Linux-compiled binaries.
+The **UI** container runs both Next.js applications — the public website
+(`:3000`) and the admin backoffice (`:3001`) — from a single image via
+`uis/start.sh`. All source directories are bind-mounted for instant
+edit-refresh. `node_modules` and `.venv` are preserved via anonymous Docker
+volumes so the host OS does not shadow Linux-compiled binaries.
 
 ### Production Deployment (VPS)
 
@@ -109,12 +110,15 @@ cd /opt/trackflow
 
 # Configure with real production secrets
 cp .env.docker .env
-# Edit .env:
+# Edit .env (env vars live on the VPS, never in Git):
 #   - JWT_SECRET_KEY (run: openssl rand -hex 32)
 #   - DATABASE_URL   (real Supabase Postgres URL)
 #   - RESEND_API_KEY / RESEND_FROM_EMAIL
-#   - NEXT_PUBLIC_INCIDENTS_API_BASE_URL (public domain or IP)
-#   - NEXT_PUBLIC_INVENTORY_API_URL (public domain or IP)
+#   - CORS_ORIGINS   (your public domains)
+#   - TRACKFLOW_UI_MODE=prod
+#   - NEXT_PUBLIC_INCIDENTS_API_BASE_URL / NEXT_PUBLIC_INVENTORY_API_URL
+#     (only if the browser hits the API at a public domain — leave blank
+#      to use the UI's server-side proxy that resolves `api:8000`)
 
 # Deploy
 bash scripts/deploy.sh
@@ -128,7 +132,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 The production overlay:
 - Removes all bind-mounts (self-contained images)
-- Runs `npm run build && npm run start` (Next.js standalone server)
+- Sets `TRACKFLOW_UI_MODE=prod` so `uis/start.sh` runs `npm run build && npm run start`
 - Uses `restart: always` for resilience
 - Disables uvicorn `--reload`
 
@@ -138,29 +142,31 @@ The production overlay:
 graph TD
     subgraph "Docker Compose — trackflow network"
         API["api:8000<br/>(FastAPI)"]
-        BO["ui-backoffice:3000<br/>(Next.js 15)"]
-        WS["ui-website:3001<br/>(Next.js 16)"]
+        UI["ui<br/>(one container)<br/>website :3000 · backoffice :3001"]
     end
 
-    BO -->|"http://api:8000"| API
-    WS -->|"http://api:8000"| API
-    BROWSER["Browser"] --> BO
-    BROWSER --> WS
+    UI -->|"Backend proxy → http://api:8000"| API
+    BROWSER["Browser"] --> UI
+    BROWSER2["Browser"] --> UI
 ```
 
-The UI containers resolve the API via the Docker DNS name `api` (not `localhost`),
-enabling inter-container communication without host networking.
+The UI container reaches the API over the Docker network using the **compose
+service name** `api` (`BACKEND_UPSTREAM=http://api:8000`) — never `localhost`.
+The Next.js server proxies `/api`, `/auth`, `/users`, `/profiles` (rewrites in
+`next.config.ts`) and `/inventory`, `/suppliers` (via `middleware.ts`, which
+only forwards API-shaped requests) to the backend.
 
 ### Files Created
 
 | File | Purpose |
 |------|---------|
-| `uis/Dockerfile` | Node.js 22 image for both Next.js apps |
-| `uis/.dockerignore` | Excludes node_modules/.next from build context |
-| `services/Dockerfile` | Python 3.12 slim image for FastAPI |
-| `services/.dockerignore` | Excludes __pycache__/data/.venv |
-| `docker-compose.yml` | Dev compose: bind-mounts, reload, healthcheck |
-| `docker-compose.prod.yml` | Prod overlay: no mounts, build+start, always restart |
+| `uis/Dockerfile` | Node.js (Alpine) image for BOTH Next.js apps; default CMD = `uis/start.sh` |
+| `uis/start.sh` | Starts website (:3000) and backoffice (:3001) in one container; dev/prod modes |
+| `uis/.dockerignore` | Excludes node_modules/.next/.env*/logs from build context |
+| `services/Dockerfile` | Python image + `uv`; uvicorn with `--reload` |
+| `services/.dockerignore` | Excludes __pycache__/tests/.env*/logs from build context |
+| `docker-compose.yml` | Dev compose: 2 services (api, ui), bind-mounts, reload, healthcheck, named network |
+| `docker-compose.prod.yml` | Prod overlay: no mounts, UI prod mode, always restart |
 | `.env.docker` | Ready-to-use dev environment (SQLite, dummy secrets) |
 | `.dockerignore` | Root-level context filter |
 | `scripts/deploy.sh` | One-command VPS deploy |
