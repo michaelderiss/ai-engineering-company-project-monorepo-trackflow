@@ -1,0 +1,65 @@
+# ======================================================================
+# TrackFlow monorepo — Docker Compose PRODUCTION overlay
+#
+# Usage (build then deploy):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Or build-and-deploy in one step on the VPS:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#     up -d --build
+#
+# The base docker-compose.yml is already production-oriented (no dev
+# bind-mounts, TRACKFLOW_UI_MODE=prod, UVICORN_RELOAD=false by
+# default). This overlay guarantees those production settings are
+# explicit and sets restart: always. It is used in place of the
+# auto-loaded docker-compose.override.yml so the dev bind-mounts /
+# hot-reload never reach production.
+#
+# Prerequisites (VPS only — never in Git):
+#   - A `.env` file at the repo root with DATABASE_URL, JWT_SECRET_KEY,
+#     RESEND_API_KEY, etc. (env vars live on the VPS, not in Git).
+#   - If the API is served at a public domain, set
+#     NEXT_PUBLIC_INCIDENTS_API_BASE_URL / NEXT_PUBLIC_INVENTORY_API_URL
+#     in .env before building. Otherwise the UI's server-side proxy
+#     forwards these routes to api:8000 by Docker service name.
+# ======================================================================
+
+services:
+
+  api:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    # Only the named persistent data volume (no bind-mounts).
+    volumes:
+      - trackflow-api-data:/app/services/api/data/
+    env_file:
+      - .env
+    environment:
+      - UVICORN_RELOAD=false
+      # CORS: comma-separated list of allowed origins for the browser.
+      # Set CORS_ORIGINS in .env for production domains.
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+    command: >
+      uvicorn services.api.main:app --host 0.0.0.0 --port 8000
+    restart: always
+
+  ui:
+    build:
+      context: .
+      dockerfile: uis/Dockerfile
+    volumes:
+      - /app/uis/website/node_modules/
+      - /app/uis/backoffice/node_modules/
+    env_file:
+      - .env
+    environment:
+      - TRACKFLOW_UI_MODE=prod
+      - WEBSITE_PORT=${WEBSITE_PORT:-3000}
+      - BACKOFFICE_PORT=${BACKOFFICE_PORT:-3001}
+      # Server-side proxy upstream — Docker service name `api`.
+      - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://api:8000}
+      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-}
+      - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-}
+    restart: always

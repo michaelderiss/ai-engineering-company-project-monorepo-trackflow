@@ -69,6 +69,110 @@ ai-engineering-project-template/
 
 ---
 
+## Docker Development (INFRA-40)
+
+The entire monorepo can be run with Docker Compose for consistent development environments
+and production deployment to a VPS.
+
+### Quick Start (Development)
+
+```bash
+# 1. Create environment (SQLite — no external Postgres needed)
+cp .env.docker .env
+
+# 2. Build and start all services
+docker compose up --build
+
+# 3. Open in browser
+#    Public website: http://localhost:3000
+#    Backoffice:     http://localhost:3001
+#    API health:     http://localhost:8000/health
+```
+
+Two services start:
+| Service | Container      | Ports | Tech              | Hot reload |
+|---------|----------------|-------|--------------------|------------|
+| API     | `trackflow-api`| 8000  | FastAPI + uvicorn  | ✅ `--reload` |
+| UI      | `trackflow-ui` | 3000, 3001 | Next.js 15 + 16 (both apps in ONE container) | ✅ `next dev` |
+
+The **UI** container runs both Next.js applications — the public website
+(`:3000`) and the admin backoffice (`:3001`) — from a single image via
+`uis/start.sh`. All source directories are bind-mounted for instant
+edit-refresh. `node_modules` and `.venv` are preserved via anonymous Docker
+volumes so the host OS does not shadow Linux-compiled binaries.
+
+### Production Deployment (VPS)
+
+```bash
+# On your VPS:
+git clone <repo-url> /opt/trackflow
+cd /opt/trackflow
+
+# Configure with real production secrets
+cp .env.docker .env
+# Edit .env (env vars live on the VPS, never in Git):
+#   - JWT_SECRET_KEY (run: openssl rand -hex 32)
+#   - DATABASE_URL   (real Supabase Postgres URL)
+#   - RESEND_API_KEY / RESEND_FROM_EMAIL
+#   - CORS_ORIGINS   (your public domains)
+#   - TRACKFLOW_UI_MODE=prod
+#   - NEXT_PUBLIC_INCIDENTS_API_BASE_URL / NEXT_PUBLIC_INVENTORY_API_URL
+#     (only if the browser hits the API at a public domain — leave blank
+#      to use the UI's server-side proxy that resolves `api:8000`)
+
+# Deploy
+bash scripts/deploy.sh
+```
+
+Or manually:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+The production overlay:
+- Removes all bind-mounts (self-contained images)
+- Sets `TRACKFLOW_UI_MODE=prod` so `uis/start.sh` runs `npm run build && npm run start`
+- Uses `restart: always` for resilience
+- Disables uvicorn `--reload`
+
+### Architecture
+
+```mermaid
+graph TD
+    subgraph "Docker Compose — trackflow network"
+        API["api:8000<br/>(FastAPI)"]
+        UI["ui<br/>(one container)<br/>website :3000 · backoffice :3001"]
+    end
+
+    UI -->|"Backend proxy → http://api:8000"| API
+    BROWSER["Browser"] --> UI
+    BROWSER2["Browser"] --> UI
+```
+
+The UI container reaches the API over the Docker network using the **compose
+service name** `api` (`BACKEND_UPSTREAM=http://api:8000`) — never `localhost`.
+The Next.js server proxies `/api`, `/auth`, `/users`, `/profiles` (rewrites in
+`next.config.ts`) and `/inventory`, `/suppliers` (via `middleware.ts`, which
+only forwards API-shaped requests) to the backend.
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `uis/Dockerfile` | Node.js (Alpine) image for BOTH Next.js apps; default CMD = `uis/start.sh` |
+| `uis/start.sh` | Starts website (:3000) and backoffice (:3001) in one container; dev/prod modes |
+| `uis/.dockerignore` | Excludes node_modules/.next/.env*/logs from build context |
+| `services/Dockerfile` | Python image + `uv`; uvicorn with `--reload` |
+| `services/.dockerignore` | Excludes __pycache__/tests/.env*/logs from build context |
+| `docker-compose.yml` | Dev compose: 2 services (api, ui), bind-mounts, reload, healthcheck, named network |
+| `docker-compose.prod.yml` | Prod overlay: no mounts, UI prod mode, always restart |
+| `.env.docker` | Ready-to-use dev environment (SQLite, dummy secrets) |
+| `.dockerignore` | Root-level context filter |
+| `scripts/deploy.sh` | One-command VPS deploy |
+
+---
+
 ## Links
 
 - [4Geeks Academy — AI Engineering](https://4geeksacademy.com/es/programas-de-carrera/ingenieria-ia)

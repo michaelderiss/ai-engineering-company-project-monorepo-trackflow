@@ -2,6 +2,54 @@
 
 ## Completed
 
+## INFRA-40 — Dockerization & Production Deploy
+
+- Dockerized the entire monorepo for reproducible development environments.
+- **`uis/Dockerfile`**: Node 22-alpine image installing deps for BOTH Next.js apps
+  via `npm ci`. Exposes ports 3000/3001. Default CMD is `uis/start.sh`.
+- **`uis/start.sh`**: Starts the public website (`:3000`) and the admin backoffice
+  (`:3001`) from ONE container. Dev mode runs `next dev` for both (hot reload);
+  `TRACKFLOW_UI_MODE=prod` runs `next build && next start`.
+- **`uis/.dockerignore`**: excludes `node_modules/`, `.next/`, `out/`, `.env*`, `*.log`.
+- **`services/Dockerfile`**: Python 3.12-slim image installing `uv` and deps from
+  `requirements.txt` via `uv pip install`. Exposes port 8000, runs uvicorn with
+  `--reload` by default.
+- **`services/.dockerignore`**: excludes `__pycache__/`, `*.pyc`, `tests/`, `*.log`,
+  `.env*`, data dirs, `.venv`.
+- **`docker-compose.yml`** (BASE — production-oriented): TWO services (`api`, `ui`)
+  on a named `trackflow` bridge network. The `ui` container runs both Next.js apps
+  (website :3000, backoffice :3001) via `start.sh`. The base has NO dev bind-mounts
+  (image is self-contained), `TRACKFLOW_UI_MODE=prod` / `UVICORN_RELOAD=false` by
+  default, an api healthcheck gates UI startup, and a named `trackflow-api-data`
+  volume persists TinyDB/SQLite. Environment via root `.env` file.
+- **`docker-compose.override.yml`** (DEV overlay — auto-loaded by `docker compose up`):
+  Docker Compose cannot remove a base bind-mount via an overlay `volumes: []`
+  (sequence-of-maps volumes merge by type+source), so dev-only mounts/hot-reload
+  must live in a SEPARATE overlay file. This one adds the repo bind-mount to both
+  services, anonymous `.venv`/`node_modules` volumes, `UVICORN_RELOAD=true`, and
+  `TRACKFLOW_UI_MODE=dev`.
+- **`docker-compose.prod.yml`** (thin PROD overlay): makes production settings
+  explicit (`TRACKFLOW_UI_MODE=prod`, `UVICORN_RELOAD=false`, no bind-mounts,
+  anonymous node_modules volumes, `restart: always`). Used instead of the override:
+  `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
+- **Inter-service communication**: the UI container reaches the API by Docker
+  service name `api` (`BACKEND_UPSTREAM=http://api:8000`) — never `localhost`.
+  The Next.js server proxies `/api`, `/auth`, `/users`, `/profiles` via rewrites
+  in `next.config.ts`, and `/inventory` + `/suppliers` via `middleware.ts`
+  (which only forwards API-shaped requests). Browser SPA calls use relative
+  paths; `NEXT_PUBLIC_*` are left blank in the proxy flow.
+- **`.env.docker`**: Ready-to-use dev environment using SQLite (no external
+  Postgres needed). Authored as a committed template (exempted from `.gitignore`).
+- **`.dockerignore`** (root): Filters out `.venv`, `node_modules`, `.next`, cache
+  files, and documentation directories from the Docker build context.
+- **`scripts/deploy.sh`**: One-command VPS deploy script pulling latest code,
+  building production images, and starting services.
+- No secrets in versioned files: `.env` is git-ignored, all secrets go in
+  environment or `.env` on the VPS. `.env.docker` contains only dev defaults.
+- **PR evidence**: live screenshots of the local dev stack and the VPS
+  production stack (compose ps + running apps) are captured under
+  `docs/screenshots/INFRA-40/` for the PR description.
+
 ## Milestone 5 — Backend Inventory Management
 
 - Added the inventory API to the existing `services/api` FastAPI application;

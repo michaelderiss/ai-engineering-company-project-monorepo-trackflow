@@ -1,0 +1,117 @@
+# ======================================================================
+# TrackFlow monorepo — Docker Compose (base / production definition)
+#
+# Quick start (development — hot reload):
+#   1. cp .env.docker .env          # or fill .env with your own values
+#   2. docker compose up --build    # auto-loads docker-compose.override.yml
+#   3. Open in browser:
+#        Public website:  http://localhost:3000
+#        Backoffice:      http://localhost:3001
+#        API health:      http://localhost:8000/health
+#
+# Development (`docker compose up`) auto-loads `docker-compose.override.yml`,
+# which adds bind-mounts + hot reload. To run WITHOUT the dev override
+# (production-like), use:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Two services:
+#   ui   → ONE container running BOTH Next.js apps (website :3000,
+#          backoffice :3001) via uis/start.sh. One image.
+#   api  → FastAPI backend (:8000).
+#
+# Inter-service communication:
+#   The UI container reaches the API by the Docker service name `api`
+#   (BACKEND_UPSTREAM=http://api:8000). The Next.js server proxies
+#   /api, /auth, /inventory, ... to api:8000 over the `trackflow`
+#   network — never localhost.
+#
+# Environment: compose loads the root `.env` file automatically.
+#   Use `.env.docker` as a starting point (SQLite, no Postgres needed).
+#   No secrets are hardcoded here — everything comes from .env.
+# ======================================================================
+
+name: trackflow
+
+services:
+
+  # ------------------------------------------------------------------
+  # FastAPI backend — TrackFlow API (:8000)
+  # ------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: trackflow-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - UVICORN_RELOAD=${UVICORN_RELOAD:-false}
+    # Production-oriented default: the image is self-contained (no bind
+    # mount). The dev override (docker-compose.override.yml) adds the
+    # bind mount + --reload.
+    volumes:
+      # Persist TinyDB + SQLite databases across restarts
+      - trackflow-api-data:/app/services/api/data/
+    command: >
+      sh -c '
+        if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
+          exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload;
+        else
+          exec uvicorn services.api.main:app --host 0.0.0.0 --port 8000;
+        fi
+      '
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # UI — one container with BOTH Next.js apps (website :3000, backoffice :3001)
+  # ------------------------------------------------------------------
+  ui:
+    build:
+      context: .
+      dockerfile: uis/Dockerfile
+    container_name: trackflow-ui
+    ports:
+      - "${WEBSITE_PORT:-3000}:3000"
+      - "${BACKOFFICE_PORT:-3001}:3001"
+    env_file:
+      - .env
+    environment:
+      - TRACKFLOW_UI_MODE=${TRACKFLOW_UI_MODE:-prod}
+      - WEBSITE_PORT=${WEBSITE_PORT:-3000}
+      - BACKOFFICE_PORT=${BACKOFFICE_PORT:-3001}
+      # Inter-service upstream: Docker service name `api`, resolved over
+      # the `trackflow` network by the Next.js server-side proxy.
+      - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://api:8000}
+      # NEXT_PUBLIC_* are baked into JS that runs in the BROWSER on the
+      # host. Left empty here so the browser uses relative /api, /auth...
+      # URLs against the UI origin; the Next.js server then proxies them
+      # to api:8000 by service name. Override in .env only if you serve
+      # the API at a public domain instead.
+      - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-}
+      - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-}
+    # No bind-mount in the base definition (image is self-contained).
+    # The dev override adds bind-mounts + node_modules volumes.
+    command: ["sh", "/app/uis/start.sh"]
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+volumes:
+  trackflow-api-data:
+
+networks:
+  trackflow:
+    driver: bridge
