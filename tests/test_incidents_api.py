@@ -1,6 +1,7 @@
 import csv
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +16,7 @@ from services.api.main import app
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "incidents.sqlite3")
-    app.dependency_overrides[get_current_user] = lambda: object()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
     yield TestClient(app, raise_server_exceptions=False)
     app.dependency_overrides.pop(get_current_user, None)
 

@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from services.api.auth import get_current_user
+from services.api.cache import cached_json, catalog_cache
 from services.api.inventory_database import (
     get_inventory_session,
     list_skus_with_stock,
@@ -48,8 +49,8 @@ def _ensure_sku_warehouse(sku: SKU, warehouse: str) -> None:
 
 
 @router.get("/products", response_model=list[SKURead])
-def get_products(session: Session = Depends(get_inventory_session)) -> list[SKURead]:
-    return [SKURead(**row) for row in list_skus_with_stock(session)]
+def get_products(session: Session = Depends(get_inventory_session)):
+    return cached_json(catalog_cache, session.get_bind(), lambda: [SKURead(**row) for row in list_skus_with_stock(session)])
 
 
 @router.post(
@@ -70,6 +71,7 @@ def post_product(
     except IntegrityError as exc:
         session.rollback()
         raise HTTPException(status_code=409, detail="A SKU with this code already exists.") from exc
+    catalog_cache.clear()
     session.refresh(sku)
     return _sku_response(sku, session)
 
@@ -103,6 +105,7 @@ def post_inbound_order(
     entry = StockEntry(**payload.dict(), user_uuid=str(current_user.id))
     session.add(entry)
     session.commit()
+    catalog_cache.clear()
     session.refresh(entry)
     return entry
 
@@ -142,6 +145,7 @@ def post_outbound_order(
     stock_exit = StockExit(**payload.dict(), user_uuid=str(current_user.id))
     session.add(stock_exit)
     session.commit()
+    catalog_cache.clear()
     session.refresh(stock_exit)
     return stock_exit
 
