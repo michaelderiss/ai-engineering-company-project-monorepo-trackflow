@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from packages.shared.incidents import BRANCHES, CATEGORIES, ORIGINS, STATUSES, TRANSITIONS, IncidentCreate
+from services.api.cache import summary_cache
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "incidents.sqlite3"
 
@@ -55,7 +56,9 @@ def create_incident(payload: IncidentCreate, created_at: str | None = None, sour
         )
         if source_key:
             db.execute("INSERT INTO incident_imports VALUES (?, ?)", (source_key, cursor.lastrowid))
-        return dict(db.execute("SELECT * FROM incidents WHERE id = ?", (cursor.lastrowid,)).fetchone())
+        record = dict(db.execute("SELECT * FROM incidents WHERE id = ?", (cursor.lastrowid,)).fetchone())
+    summary_cache.clear()
+    return record
 
 
 def list_incidents(**filters):
@@ -82,7 +85,9 @@ def update_status(incident_id: int, status: str):
         if status not in TRANSITIONS[row["status"]]:
             raise ValueError("This status change is not allowed. Resolved and discarded incidents are final.")
         db.execute("UPDATE incidents SET status = ?, updated_at = ? WHERE id = ?", (status, datetime.now(timezone.utc).isoformat(), incident_id))
-        return dict(db.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone())
+        record = dict(db.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,)).fetchone())
+    summary_cache.clear()
+    return record
 
 
 def summary():

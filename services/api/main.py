@@ -6,8 +6,9 @@ import os
 from io import StringIO
 from pathlib import Path
 import sys
+import time
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
@@ -36,6 +37,30 @@ from services.api.routes.incidents import router as incidents_router  # noqa: E4
 from services.api.routes.inventory import router as inventory_router  # noqa: E402
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
+timing_logger = logging.getLogger("api.timing")
+timing_logger.setLevel(logging.INFO)
+if not timing_logger.hasHandlers():
+    timing_logger.addHandler(logging.StreamHandler())
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        timing_logger.info(
+            "%s %s status=%s duration_ms=%.3f",
+            request.method,
+            getattr(route, "path", "<unmatched>"),
+            status_code,
+            (time.perf_counter() - started) * 1000,
+        )
+
 
 # ------------------------------------------------------------------
 # CORS origins

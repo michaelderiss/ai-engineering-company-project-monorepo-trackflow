@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import InventoryShell from "../../../components/InventoryShell";
 import {
   getInventoryOrders,
   type InventoryOrder,
 } from "../../../lib/inventory";
 
-function movementLabel(order: InventoryOrder): string {
-  if (order.order_type === "inbound") return "Inbound receipt";
-  return order.exit_type === "loss" ? "Confirmed loss" : "Customer dispatch";
-}
+const InventoryHistoryTable = dynamic(() => import("../../../components/InventoryHistoryTable"), {
+  ssr: false,
+  loading: () => <p role="status">Loading movement table...</p>,
+});
 
 export default function InventoryOrdersPage() {
   const [orders, setOrders] = useState<InventoryOrder[]>([]);
@@ -46,23 +47,7 @@ export default function InventoryOrdersPage() {
         {loading ? <p role="status">Loading order history…</p> : error ? (
           <div role="alert" className="inventory-feedback error"><p>{error}</p><button type="button" onClick={() => setRevision((value) => value + 1)}>Retry history</button></div>
         ) : orders.length === 0 ? <p role="status">No stock movements have been recorded.</p> : (
-          <div className="inventory-table-scroll">
-            <table className="inventory-table">
-              <caption className="sr-only">Inventory movement history with product and creator</caption>
-              <thead><tr><th scope="col">Product</th><th scope="col">Movement</th><th scope="col">Quantity</th><th scope="col">Warehouse</th><th scope="col">Reference / tracking</th><th scope="col">Created</th><th scope="col">Created by</th></tr></thead>
-              <tbody>{orders.map((order) => (
-                <tr key={`${order.order_type}-${order.id}`}>
-                  <td><strong>{order.sku.name}</strong><br /><span className="inventory-muted">{order.sku.sku}</span></td>
-                  <td><span className={`inventory-type ${order.order_type}`}>{movementLabel(order)}</span></td>
-                  <td>{order.quantity}</td>
-                  <td>{order.warehouse === "LA" ? "Los Angeles (LA)" : "Zaragoza (ZGZ)"}</td>
-                  <td>{order.reference ?? order.tracking_number ?? "—"}</td>
-                  <td><time dateTime={order.created_at}>{new Date(order.created_at).toLocaleString()}</time></td>
-                  <td>{order.user_uuid}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
+          <InventoryHistoryTable orders={orders} />
         )}
       </section>
     </InventoryShell>

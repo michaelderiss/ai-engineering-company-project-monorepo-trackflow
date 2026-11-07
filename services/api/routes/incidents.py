@@ -9,6 +9,8 @@ from packages.shared.incidents import (
 )
 from services.api import incidents as store
 from services.api.auth import get_current_user
+from services.api.cache import cached_json, summary_cache
+from services.api.models import User
 
 router = APIRouter(prefix="/api/incidents", tags=["incidents"], dependencies=[Depends(get_current_user)])
 
@@ -19,8 +21,8 @@ def options():
 
 
 @router.get("/summary")
-def summary():
-    return store.summary()
+def summary(current_user: User = Depends(get_current_user)):
+    return cached_json(summary_cache, (store.DB_PATH, current_user.id), store.summary)
 
 
 @router.post("", response_model=Incident, status_code=201)

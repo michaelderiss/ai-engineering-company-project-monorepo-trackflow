@@ -40,7 +40,13 @@ def isolated_storage(tmp_path, monkeypatch):
         f"sqlite:///{(tmp_path / 'inventory.sqlite3').as_posix()}"
     )
     monkeypatch.setattr(inventory_database_module, "engine", inventory_engine)
+    from services.api.cache import catalog_cache, summary_cache
+
+    catalog_cache.clear()
+    summary_cache.clear()
     yield
+    catalog_cache.clear()
+    summary_cache.clear()
     inventory_engine.dispose()
 
 
