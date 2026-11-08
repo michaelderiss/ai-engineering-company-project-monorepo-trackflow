@@ -17,20 +17,24 @@ def _user_payload(email: str, password: str = "StrongPass123!", **overrides) -> 
 
 
 class TestCreateUser:
-    def test_happy_path_creates_user_with_hashed_password(self, client, make_email):
+    def test_happy_path_creates_user_without_returning_credentials(self, client, make_email):
         email = make_email("users")
         response = client.post(
             "/users", json=_user_payload(email, profile={"display_name": "Ada"})
         )
         assert response.status_code == 201
         body = response.json()
-        assert body["email"] == email
         assert body["id"] > 0
-        # The password must be stored hashed, never returned in plaintext.
-        assert body["hashed_password"] != "StrongPass123!"
-        assert "StrongPass123!" not in body["hashed_password"]
+        assert "email" not in body
+        assert "password" not in body
+        assert "hashed_password" not in body
         assert body["role"] == "user"
-        assert body["profile"]["display_name"] == "Ada"
+
+    def test_signup_cannot_set_privileged_fields(self, client, make_email):
+        response = client.post(
+            "/users", json=_user_payload(make_email("users"), role="admin", is_active=False)
+        )
+        assert response.status_code == 422
 
     def test_edge_case_defaults_role_to_user(self, client, make_email):
         email = make_email("users")
@@ -67,7 +71,7 @@ class TestListUsers:
         assert response.status_code == 200
         body = response.json()
         assert isinstance(body, list)
-        assert any(user["id"] == admin_account["user"]["id"] for user in body)
+        assert any(user["id"] == admin_account["user"].id for user in body)
 
     def test_edge_case_authenticated_user_can_list(self, client, auth_headers):
         """The list endpoint requires authentication but not admin role."""
@@ -86,7 +90,7 @@ class TestGetUser:
         user_id = account["user"]["id"]
         response = client.get(f"/users/{user_id}", headers=headers)
         assert response.status_code == 200
-        assert response.json()["email"] == account["email"]
+        assert "email" not in response.json()
 
     def test_failure_missing_user_returns_404(self, client, auth_headers):
         headers, _ = auth_headers
@@ -104,14 +108,13 @@ class TestGetUser:
 
 
 class TestPatchUser:
-    def test_happy_path_user_updates_own_role(self, client, auth_headers):
+    def test_user_cannot_update_own_role(self, client, auth_headers):
         headers, account = auth_headers
         user_id = account["user"]["id"]
         response = client.patch(
             f"/users/{user_id}", json={"role": "manager"}, headers=headers
         )
-        assert response.status_code == 200
-        assert response.json()["role"] == "manager"
+        assert response.status_code == 403
 
     def test_failure_non_admin_cannot_edit_other_user(self, client, create_user, auth_headers):
         headers, _ = auth_headers

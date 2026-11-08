@@ -68,9 +68,19 @@ class UserBase(BaseModel):
         extra = "forbid"
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    email: str = Field(..., min_length=1)
     password: str = Field(..., min_length=8)
     profile: ProfileCreate | None = None
+
+    @validator("email")
+    def validate_email(cls, value: str) -> str:
+        if "@" not in value or "." not in value:
+            raise ValueError("Email must be a valid address.")
+        return value
+
+    class Config:
+        extra = "forbid"
 
 
 class User(UserBase):

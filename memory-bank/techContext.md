@@ -1,5 +1,52 @@
 # Technical Context
 
+## API serialization contracts
+
+- Public success responses use API-owned response models in
+  `services/api/response_schemas.py`, distinct from internal user/storage models
+  and write request schemas. Keep `User.hashed_password` internal to auth and
+  storage; never attach it to a FastAPI response model.
+- Signup request permits email, password and optional profile only; role and
+  active state are server defaults. `/auth/me` is the authenticated self-service
+  projection that includes the caller's email. User directory/detail/PATCH
+  projections omit email, hashes, and nested profile data. Only admins may update
+  a user's role or active state.
+- Inventory movement response schemas omit internal `user_uuid`; persistence
+  still records actor identity. History sends the SKU details required by the UI
+  and no redundant creator ID. Preserve catalog-cache and incident-summary-cache
+  behavior when changing serialization.
+- The analyzer JSON has a typed schema. CSV export is a streamed `text/csv`
+  response documented through its OpenAPI media type/content schema, not a JSON
+  Pydantic response model. Framework-generated OpenAPI/docs routes are metadata,
+  not business endpoint response contracts. See `docs/serialization-audit.md`.
+
+## Caching and Profiling
+
+- `services/api/cache.py` owns bounded, monotonic TTL caches storing immutable
+  serialized JSON; misses are lock-serialized, errors/oversized values uncached.
+  Catalog: 15s, engine-identity key, 4 entries/1MiB each. Incident summary: 30s,
+  `(DB_PATH, authenticated user ID)` key, 128 entries/16KiB each. Authentication
+  remains active on cache hits; HTTP `Cache-Control: no-store` prevents proxy reuse.
+- Inventory route commits clear catalog; incident store commits clear all user
+  summaries, including same-process seeding. TTL bounds external-process/worker
+  staleness, not distributed read-your-writes. Use Redis/coordinated invalidation
+  before promising that guarantee across workers. Stock detail/dispatch remain
+  authoritative database reads; no cached availability authorizes an outbound.
+- `main.py` logs matched route templates, method, status and duration via
+  `api.timing`; no query values, path identifiers, tokens or payloads are logged.
+- Conditional `next/dynamic` components: `IncidentAnalysisReport` after analysis,
+  `InventoryHistoryTable` after nonempty history fetch. History memoizes row/date
+  preparation by `[orders]` and renders 50 rows/page. This is not server pagination;
+  first data transfer/preparation remains O(n). Memo lifetime is component-local.
+- `scripts/profile_caching.py` creates temporary varied SQLite datasets only,
+  supports `--uncached`, outputs registered routes/row counts/timings and deletes
+  storage. `scripts/check_caching_ui.cjs` uses separately installed Playwright and
+  synthetic API interception to test chunk gating, memo reuse and mobile layouts.
+  `CACHING_REPORT.md` documents evidence, estimates, tradeoffs and known limits.
+- Environment correction: `uv` is not present in the current container despite
+  earlier notes; use an available isolated environment with API/test requirements.
+  Caching validation used `/tmp/trackflow-caching-venv/bin/python`.
+
 ## Current repository baseline
 
 This repository now combines three active implementation layers:

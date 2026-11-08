@@ -40,7 +40,13 @@ def isolated_storage(tmp_path, monkeypatch):
         f"sqlite:///{(tmp_path / 'inventory.sqlite3').as_posix()}"
     )
     monkeypatch.setattr(inventory_database_module, "engine", inventory_engine)
+    from services.api.cache import catalog_cache, summary_cache
+
+    catalog_cache.clear()
+    summary_cache.clear()
     yield
+    catalog_cache.clear()
+    summary_cache.clear()
     inventory_engine.dispose()
 
 
@@ -108,8 +114,13 @@ def frozen_now():
 @pytest.fixture
 def admin_account(client, make_email):
     """A manager/admin-level user used to exercise backoffice access control."""
+    from services.api.database import get_user_by_id, update_user
+    from services.api.models import Role, UserUpdate
+
     email = make_email("admin")
-    user = register_user(client, email, "AdminPass123!", role="admin")
+    user = register_user(client, email, "AdminPass123!")
+    update_user(user["id"], UserUpdate(role=Role.ADMIN))
+    user = get_user_by_id(user["id"])
     response = client.post(
         "/auth/login", data={"username": email, "password": "AdminPass123!"}
     )
@@ -124,8 +135,13 @@ def admin_account(client, make_email):
 
 @pytest.fixture
 def manager_account(client, make_email):
+    from services.api.database import get_user_by_id, update_user
+    from services.api.models import Role, UserUpdate
+
     email = make_email("manager")
-    user = register_user(client, email, "ManagerPass123!", role="manager")
+    user = register_user(client, email, "ManagerPass123!")
+    update_user(user["id"], UserUpdate(role=Role.MANAGER))
+    user = get_user_by_id(user["id"])
     response = client.post(
         "/auth/login", data={"username": email, "password": "ManagerPass123!"}
     )

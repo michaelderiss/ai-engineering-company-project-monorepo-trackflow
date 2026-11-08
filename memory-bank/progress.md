@@ -1,5 +1,48 @@
 # Progress
 
+## API Serialization Audit
+
+- Introduced endpoint-specific response projections across the FastAPI business
+  routes. Public user responses never contain password hashes; signup does not
+  echo email and cannot select a role or active status. `/auth/me` deliberately
+  returns only the authenticated user's email. Role/active changes through user
+  PATCH are admin-only.
+- Added typed responses for message/delete, health, incident options/summary,
+  analyzer output, supplier/profile/user, and inventory contracts. Streaming CSV
+  is described as `text/csv` in OpenAPI rather than being misrepresented as JSON.
+- Inventory movement storage retains actor IDs, but API outputs and history UI
+  omit raw `user_uuid`; list/history projections carry only fields used by the
+  operational UI. Existing inventory catalog and user-scoped incident summary
+  caching semantics are preserved.
+- Added endpoint-by-endpoint baseline/target documentation in
+  `docs/serialization-audit.md`. Regression tests and OpenAPI checks are part of
+  this milestone; update verification details after completing validation.
+
+## Caching Optimisation Milestone
+
+- Added privacy-safe per-request route/status timing and bounded in-process JSON
+  caches: public inventory catalog 15s; authenticated, user-scoped incident summary
+  30s. Successful product/movement and incident create/status writes invalidate
+  their respective caches. Outbound stock checks and SKU detail remain uncached.
+- Added disposable-data profiling in `scripts/profile_caching.py` (`--uncached`
+  for baseline): 2,006 SKUs, 40,007 movements and 20,000 incidents. Local seeded
+  medians: catalog 107.14ms uncached vs 2.01ms cached; summary 28.27ms vs 1.88ms.
+  These are synthetic SQLite measurements, not production telemetry.
+- Lazily load analyzer results after successful analysis and movement table after
+  history data. Memoize measured history formatting by `[orders]`; paginate at 50
+  rows. Desktop/mobile browser checks confirm no recomputation on page changes
+  and recomputation on refresh; `scripts/check_caching_ui.cjs` reproduces checks.
+- Validation: 172 backend tests, 32 frontend tests, backoffice typecheck/build
+  passed. See `CACHING_REPORT.md` for complete endpoint assessment, TTL tradeoffs,
+  reproduction, evidence and limits. Current branch remains `feature/caching`.
+- Invalidation is process-local; other workers/external writers may be stale until
+  TTL expiry. Use one worker for immediate read-your-writes or coordinate via Redis.
+  Legacy analyzer `_LAST_ANALYSIS` cross-user ownership remains a separate risk.
+- Current container lacks `uv`; backend verification used a disposable venv at
+  `/tmp/trackflow-caching-venv`, not the project environment. Production data and
+  existing website changes were not touched. Final implementation and publication
+  were approved by the user; submit `feature/caching` against `main`.
+
 ## Completed
 
 ## INFRA-40 — Dockerization & Production Deploy

@@ -6,8 +6,9 @@ import os
 from io import StringIO
 from pathlib import Path
 import sys
+import time
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
@@ -34,8 +35,36 @@ from services.api.routes.suppliers import router as suppliers_router  # noqa: E4
 from services.api.routes.users import router as users_router  # noqa: E402
 from services.api.routes.incidents import router as incidents_router  # noqa: E402
 from services.api.routes.inventory import router as inventory_router  # noqa: E402
+from services.api.response_schemas import (  # noqa: E402
+    HealthResponse,
+    IncidentAnalysisResponse,
+)
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
+timing_logger = logging.getLogger("api.timing")
+timing_logger.setLevel(logging.INFO)
+if not timing_logger.hasHandlers():
+    timing_logger.addHandler(logging.StreamHandler())
+
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        timing_logger.info(
+            "%s %s status=%s duration_ms=%.3f",
+            request.method,
+            getattr(route, "path", "<unmatched>"),
+            status_code,
+            (time.perf_counter() - started) * 1000,
+        )
+
 
 # ------------------------------------------------------------------
 # CORS origins
@@ -90,14 +119,14 @@ app.include_router(suppliers_router)
 app.include_router(inventory_router)
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 def health() -> dict[str, str]:
     if not getattr(app.state, "storage_ready", True):
         raise HTTPException(503, "Service storage is unavailable.")
     return {"status": "ok"}
 
 
-@app.post("/api/incidents/analyze")
+@app.post("/api/incidents/analyze", response_model=IncidentAnalysisResponse)
 async def analyze_incidents(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -133,7 +162,17 @@ async def analyze_incidents(
     return payload
 
 
-@app.get("/api/incidents/results/export")
+@app.get(
+    "/api/incidents/results/export",
+    response_class=StreamingResponse,
+    response_model=None,
+    responses={
+        200: {
+            "description": "CSV report download.",
+            "content": {"text/csv": {"schema": {"type": "string"}}},
+        }
+    },
+)
 def export_last_results(current_user: User = Depends(get_current_user)) -> StreamingResponse:
     if _LAST_ANALYSIS is None:
         raise HTTPException(status_code=404, detail="No analysis available. Upload a CSV first.")
