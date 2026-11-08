@@ -21,8 +21,8 @@ export default function InventoryHistoryTable({ orders }: { orders: InventoryOrd
     <>
       <div className="inventory-table-scroll">
         <table className="inventory-table">
-          <caption className="sr-only">Inventory movement history with product and creator</caption>
-          <thead><tr><th scope="col">Product</th><th scope="col">Movement</th><th scope="col">Quantity</th><th scope="col">Warehouse</th><th scope="col">Reference / tracking</th><th scope="col">Created</th><th scope="col">Created by</th></tr></thead>
+          <caption className="sr-only">Inventory movement history</caption>
+          <thead><tr><th scope="col">Product</th><th scope="col">Movement</th><th scope="col">Quantity</th><th scope="col">Warehouse</th><th scope="col">Reference / tracking</th><th scope="col">Created</th></tr></thead>
           <tbody>{visibleRows.map((order) => (
             <tr key={`${order.order_type}-${order.id}`}>
               <td><strong>{order.sku.name}</strong><br /><span className="inventory-muted">{order.sku.sku}</span></td>
@@ -31,7 +31,6 @@ export default function InventoryHistoryTable({ orders }: { orders: InventoryOrd
               <td>{order.warehouseLabel}</td>
               <td>{order.reference ?? order.tracking_number ?? "—"}</td>
               <td><time dateTime={order.created_at}>{order.createdLabel}</time></td>
-              <td>{order.user_uuid}</td>
             </tr>
           ))}</tbody>
         </table>

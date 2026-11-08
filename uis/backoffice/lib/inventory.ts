@@ -27,7 +27,6 @@ export type StockEntry = {
   reference: string;
   warehouse: Warehouse;
   created_at: string;
-  user_uuid: string;
 };
 
 export type StockExit = {
@@ -38,7 +37,6 @@ export type StockExit = {
   tracking_number: string | null;
   warehouse: Warehouse;
   created_at: string;
-  user_uuid: string;
 };
 
 export type InventoryOrder = {
@@ -51,7 +49,6 @@ export type InventoryOrder = {
   tracking_number: string | null;
   warehouse: Warehouse;
   created_at: string;
-  user_uuid: string;
   sku: Omit<InventoryProduct, "current_stock">;
 };
 
@@ -91,7 +88,6 @@ function isOrder(value: unknown): value is InventoryOrder {
     typeof value.quantity === "number" &&
     isWarehouse(value.warehouse) &&
     typeof value.created_at === "string" &&
-    typeof value.user_uuid === "string" &&
     isObject(value.sku) &&
     typeof value.sku.id === "number" &&
     typeof value.sku.name === "string" &&
@@ -162,8 +158,7 @@ export function createStockEntry(payload: CreateStockEntry): Promise<StockEntry>
       typeof value.quantity === "number" &&
       typeof value.reference === "string" &&
       isWarehouse(value.warehouse) &&
-      typeof value.created_at === "string" &&
-      typeof value.user_uuid === "string",
+      typeof value.created_at === "string",
   );
 }
 
@@ -179,8 +174,7 @@ export function createStockExit(payload: CreateStockExit): Promise<StockExit> {
       (value.exit_type === "dispatch" || value.exit_type === "loss") &&
       (typeof value.tracking_number === "string" || value.tracking_number === null) &&
       isWarehouse(value.warehouse) &&
-      typeof value.created_at === "string" &&
-      typeof value.user_uuid === "string",
+      typeof value.created_at === "string",
   );
 }
 

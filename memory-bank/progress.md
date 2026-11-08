@@ -1,5 +1,23 @@
 # Progress
 
+## API Serialization Audit
+
+- Introduced endpoint-specific response projections across the FastAPI business
+  routes. Public user responses never contain password hashes; signup does not
+  echo email and cannot select a role or active status. `/auth/me` deliberately
+  returns only the authenticated user's email. Role/active changes through user
+  PATCH are admin-only.
+- Added typed responses for message/delete, health, incident options/summary,
+  analyzer output, supplier/profile/user, and inventory contracts. Streaming CSV
+  is described as `text/csv` in OpenAPI rather than being misrepresented as JSON.
+- Inventory movement storage retains actor IDs, but API outputs and history UI
+  omit raw `user_uuid`; list/history projections carry only fields used by the
+  operational UI. Existing inventory catalog and user-scoped incident summary
+  caching semantics are preserved.
+- Added endpoint-by-endpoint baseline/target documentation in
+  `docs/serialization-audit.md`. Regression tests and OpenAPI checks are part of
+  this milestone; update verification details after completing validation.
+
 ## Caching Optimisation Milestone
 
 - Added privacy-safe per-request route/status timing and bounded in-process JSON

@@ -102,5 +102,4 @@ class StockOrderRead(BaseModel):
     tracking_number: str | None = None
     warehouse: Warehouse
     created_at: datetime
-    user_uuid: str
     sku: SKUReference

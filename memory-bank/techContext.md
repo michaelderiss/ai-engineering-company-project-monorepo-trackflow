@@ -1,5 +1,25 @@
 # Technical Context
 
+## API serialization contracts
+
+- Public success responses use API-owned response models in
+  `services/api/response_schemas.py`, distinct from internal user/storage models
+  and write request schemas. Keep `User.hashed_password` internal to auth and
+  storage; never attach it to a FastAPI response model.
+- Signup request permits email, password and optional profile only; role and
+  active state are server defaults. `/auth/me` is the authenticated self-service
+  projection that includes the caller's email. User directory/detail/PATCH
+  projections omit email, hashes, and nested profile data. Only admins may update
+  a user's role or active state.
+- Inventory movement response schemas omit internal `user_uuid`; persistence
+  still records actor identity. History sends the SKU details required by the UI
+  and no redundant creator ID. Preserve catalog-cache and incident-summary-cache
+  behavior when changing serialization.
+- The analyzer JSON has a typed schema. CSV export is a streamed `text/csv`
+  response documented through its OpenAPI media type/content schema, not a JSON
+  Pydantic response model. Framework-generated OpenAPI/docs routes are metadata,
+  not business endpoint response contracts. See `docs/serialization-audit.md`.
+
 ## Caching and Profiling
 
 - `services/api/cache.py` owns bounded, monotonic TTL caches storing immutable

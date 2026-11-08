@@ -125,8 +125,8 @@ def test_stock_movement_writes_require_authentication(client):
     assert outbound.status_code == 401
 
 
-def test_inbound_order_increases_computed_stock_and_records_user(client, auth_headers):
-    headers, account = auth_headers
+def test_inbound_order_increases_computed_stock_without_exposing_creator_id(client, auth_headers):
+    headers, _account = auth_headers
     product = _sku_by_code(client, "TEC-EAR-001")
     response = client.post(
         "/inventory/orders/inbound",
@@ -140,7 +140,7 @@ def test_inbound_order_increases_computed_stock_and_records_user(client, auth_he
     )
 
     assert response.status_code == 201
-    assert response.json()["user_uuid"] == str(account["user"]["id"])
+    assert "user_uuid" not in response.json()
     assert _sku_by_code(client, "TEC-EAR-001")["current_stock"] == 16
 
 
@@ -281,7 +281,7 @@ def test_valid_outbound_and_orders_list_include_sku_details(client, auth_headers
     )
 
     assert response.status_code == 201
-    assert response.json()["user_uuid"] == str(account["user"]["id"])
+    assert "user_uuid" not in response.json()
     assert _sku_by_code(client, "TEC-EAR-001")["current_stock"] == 9
 
     orders = client.get("/inventory/orders")
@@ -292,3 +292,4 @@ def test_valid_outbound_and_orders_list_include_sku_details(client, auth_headers
     assert created["order_type"] == "outbound"
     assert created["sku"]["sku"] == "TEC-EAR-001"
     assert created["warehouse"] == "LA"
+    assert "user_uuid" not in created

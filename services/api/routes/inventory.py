@@ -14,22 +14,24 @@ from services.api.inventory_database import (
 from services.api.inventory_models import SKU, StockEntry, StockExit
 from services.api.inventory_schemas import (
     SKUCreate,
-    SKURead,
-    SKUReference,
     StockEntryCreate,
-    StockEntryRead,
     StockExitCreate,
-    StockExitRead,
-    StockOrderRead,
 )
 from services.api.models import User
+from services.api.response_schemas import (
+    SKUReferenceResponse,
+    SKUResponse,
+    StockEntryResponse,
+    StockExitResponse,
+    StockOrderResponse,
+)
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
-def _sku_response(sku: SKU, session: Session) -> SKURead:
+def _sku_response(sku: SKU, session: Session) -> SKUResponse:
     entries, exits = stock_totals(session, sku.id, sku.warehouse)
-    return SKURead(
+    return SKUResponse(
         id=sku.id,
         name=sku.name,
         sku=sku.sku,
@@ -48,14 +50,14 @@ def _ensure_sku_warehouse(sku: SKU, warehouse: str) -> None:
         )
 
 
-@router.get("/products", response_model=list[SKURead])
+@router.get("/products", response_model=list[SKUResponse])
 def get_products(session: Session = Depends(get_inventory_session)):
-    return cached_json(catalog_cache, session.get_bind(), lambda: [SKURead(**row) for row in list_skus_with_stock(session)])
+    return cached_json(catalog_cache, session.get_bind(), lambda: [SKUResponse(**row) for row in list_skus_with_stock(session)])
 
 
 @router.post(
     "/products",
-    response_model=SKURead,
+    response_model=SKUResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def post_product(
@@ -76,11 +78,11 @@ def post_product(
     return _sku_response(sku, session)
 
 
-@router.get("/products/{sku_id}", response_model=SKURead)
+@router.get("/products/{sku_id}", response_model=SKUResponse)
 def get_product(
     sku_id: int,
     session: Session = Depends(get_inventory_session),
-) -> SKURead:
+) -> SKUResponse:
     sku = session.get(SKU, sku_id)
     if sku is None:
         raise HTTPException(status_code=404, detail="SKU not found.")
@@ -89,14 +91,14 @@ def get_product(
 
 @router.post(
     "/orders/inbound",
-    response_model=StockEntryRead,
+    response_model=StockEntryResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def post_inbound_order(
     payload: StockEntryCreate,
     session: Session = Depends(get_inventory_session),
     current_user: User = Depends(get_current_user),
-) -> StockEntry:
+) -> StockEntryResponse:
     sku = session.get(SKU, payload.sku_id)
     if sku is None:
         raise HTTPException(status_code=404, detail="SKU not found.")
@@ -112,14 +114,14 @@ def post_inbound_order(
 
 @router.post(
     "/orders/outbound",
-    response_model=StockExitRead,
+    response_model=StockExitResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def post_outbound_order(
     payload: StockExitCreate,
     session: Session = Depends(get_inventory_session),
     current_user: User = Depends(get_current_user),
-) -> StockExit:
+) -> StockExitResponse:
     sku = session.exec(
         select(SKU)
         .where(SKU.id == payload.sku_id, SKU.warehouse == payload.warehouse)
@@ -150,21 +152,21 @@ def post_outbound_order(
     return stock_exit
 
 
-@router.get("/orders", response_model=list[StockOrderRead])
+@router.get("/orders", response_model=list[StockOrderResponse])
 def get_orders(
     session: Session = Depends(get_inventory_session),
-) -> list[StockOrderRead]:
+) -> list[StockOrderResponse]:
     inbound_rows = session.exec(
         select(StockEntry, SKU).join(SKU, StockEntry.sku_id == SKU.id)
     ).all()
     outbound_rows = session.exec(
         select(StockExit, SKU).join(SKU, StockExit.sku_id == SKU.id)
     ).all()
-    orders: list[StockOrderRead] = []
+    orders: list[StockOrderResponse] = []
 
     for entry, sku in inbound_rows:
         orders.append(
-            StockOrderRead(
+            StockOrderResponse(
                 id=entry.id,
                 order_type="inbound",
                 sku_id=entry.sku_id,
@@ -172,13 +174,12 @@ def get_orders(
                 reference=entry.reference,
                 warehouse=entry.warehouse,
                 created_at=entry.created_at,
-                user_uuid=entry.user_uuid,
-                sku=SKUReference.from_orm(sku),
+                sku=SKUReferenceResponse.from_orm(sku),
             )
         )
     for stock_exit, sku in outbound_rows:
         orders.append(
-            StockOrderRead(
+            StockOrderResponse(
                 id=stock_exit.id,
                 order_type="outbound",
                 sku_id=stock_exit.sku_id,
@@ -187,8 +188,7 @@ def get_orders(
                 tracking_number=stock_exit.tracking_number,
                 warehouse=stock_exit.warehouse,
                 created_at=stock_exit.created_at,
-                user_uuid=stock_exit.user_uuid,
-                sku=SKUReference.from_orm(sku),
+                sku=SKUReferenceResponse.from_orm(sku),
             )
         )
 
