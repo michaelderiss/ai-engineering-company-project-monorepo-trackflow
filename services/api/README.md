@@ -4,6 +4,17 @@ The password recovery flow sends reset links through Resend. Copy the root `.env
 
 The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` defaults to 30, and `BACKOFFICE_URL` defaults to `http://localhost:3000`; the generated reset link points to the backoffice app. `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` configures the backoffice API address.
 
+## Telemetry capture (Part 2)
+
+`POST /api/telemetry/events` accepts a strict batch of up to 20 allowlisted
+events (64 KiB total). `TELEMETRY_ENABLED` defaults to `true`; set it to
+`false` to disable capture. This milestone validates and acknowledges batches
+in memory only: it does not persist events. Logs contain accepted counts only,
+never event properties or identity values. The backoffice browser service sends
+best-effort batches and drops them after bounded retries. Do not enable the
+receiver for a public deployment without the planned rate limits and storage
+access controls.
+
 Reset links and recipient addresses are not printed by default. For local development only, explicitly set `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in the root `.env` to print a usable reset link when Resend is unavailable. Restart the API after changing the setting. Never enable this in production or shared logs; console links are credentials. Real email still requires a valid Resend key and sender.
 
 Run the API from the repository root with:
@@ -95,4 +106,4 @@ All handled API errors now return JSON with `message`, a compatibility `detail`,
 
 Internal exception text, request passwords, connection details, and reset tokens are never included in normal error responses. CSV structure is validated before processing. Database conflicts have a dedicated exception type so corrupt storage is not mistaken for an input conflict.
 
-See `docs/ERROR_HANDLING.md` for the audit, browser checks, and automated verification commands.
+See `docs/ERROR_HANDLING.md` for the audit, browser checks, and automated verification commands.

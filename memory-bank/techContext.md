@@ -20,6 +20,35 @@
   Pydantic response model. Framework-generated OpenAPI/docs routes are metadata,
   not business endpoint response contracts. See `docs/serialization-audit.md`.
 
+## Telemetry contract and sequencing
+
+- Company telemetry source: `trackflow-BRIEFINGTelemetry.md`; its exact mandatory
+  event types are `inbound_order_created`, `outbound_order_created`,
+  `stock_threshold_triggered`, `direct_stock_edit_rejected`, and
+  `inventory_discrepancy_detected`. Its required dimensions include warehouse,
+  client, SKU/product, category, and quantity; no recipient/carrier data belongs
+  in these events.
+- Part 1 contract is `docs/telemetry/event-schemas.json`, documented in
+  `docs/telemetry/telemetry-plan.md`. Note current source mismatch: inventory DB
+  uses `LA`/`ZGZ`, display `client_name`, and integer SKU primary keys, while
+  telemetry calls for `los_angeles`/`zaragoza`, stable `client_id`, and product
+  SKU code. Add explicit mapping and a stable client-ID source before capture;
+  never substitute display name or invent an ID.
+- Envelope identity design: nullable opaque session UUID and an independent
+  random UUID `userId` scoped to that authenticated session. Generate/rotate both
+  at login and clear them at logout/session expiry; never derive `userId` from
+  the account ID. This enables within-session grouping only, not cross-session
+  analytics. Never record email, passwords, tokens, raw request bodies or IPs.
+  Event properties are strict per-event allowlists. Batch queue/drop behavior is
+  non-blocking; order events occur only after commits.
+- Three briefing metrics require future trigger sources: threshold crossing,
+  actual direct-write rejection (the current API has no direct-write route), and
+  physical-count discrepancy. Do not infer or fabricate them from unrelated
+  events.
+- Execute telemetry milestones in order: approved plan/schema → FastAPI stub +
+  browser batch service/instrumentation → pause for user Supabase setup before
+  storage persistence → report pipeline/dashboard using real event data.
+
 ## Caching and Profiling
 
 - `services/api/cache.py` owns bounded, monotonic TTL caches storing immutable

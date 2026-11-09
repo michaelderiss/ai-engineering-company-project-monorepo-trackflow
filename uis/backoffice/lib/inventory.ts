@@ -5,6 +5,7 @@ import {
   getToken,
   redirectToLogin,
 } from "./auth";
+import { trackTelemetry } from "./telemetry";
 
 export type Warehouse = "LA" | "ZGZ";
 export type InventoryCategory = "fashion" | "electronics" | "cosmetics";
@@ -128,11 +129,14 @@ async function inventoryRequest<T>(
 }
 
 export function getInventoryProducts(): Promise<InventoryProduct[]> {
-  return inventoryRequest(
+  return inventoryRequest<InventoryProduct[]>(
     "/products",
     {},
     (value) => Array.isArray(value) && value.every(isProduct),
-  );
+  ).then((products) => {
+    trackTelemetry("inventory_products_viewed", { result_count: products.length });
+    return products;
+  });
 }
 
 export function getInventoryProduct(id: number): Promise<InventoryProduct> {
@@ -184,4 +188,4 @@ export function getInventoryOrders(): Promise<InventoryOrder[]> {
     {},
     (value) => Array.isArray(value) && value.every(isOrder),
   );
-}
+}

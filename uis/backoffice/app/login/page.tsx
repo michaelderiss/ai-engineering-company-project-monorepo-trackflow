@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { publicApiFetch, isObject, setToken, redirectToHome } from "../../lib/auth";
+import { beginTelemetrySession, trackLoginFailure, trackTelemetry } from "../../lib/telemetry";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -38,8 +39,11 @@ export default function LoginPage() {
         }, (value) => isObject(value) && typeof value.access_token === "string" && value.access_token.length > 0,
       );
       setToken(data.access_token);
+      beginTelemetrySession();
+      trackTelemetry("login_succeeded", { auth_method: "password" });
       redirectToHome();
     } catch (err) {
+      trackLoginFailure(err instanceof Error && /network|fetch|timeout/i.test(err.message) ? "network_error" : "invalid_credentials");
       const message = err instanceof Error ? err.message : "Unexpected error.";
       setError(message);
     } finally {
@@ -103,4 +107,4 @@ export default function LoginPage() {
       </section>
     </main>
   );
-}
+}

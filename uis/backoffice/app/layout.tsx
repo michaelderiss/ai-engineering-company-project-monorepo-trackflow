@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { TelemetryBootstrap } from "../components/TelemetryBootstrap";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,7 @@ export default function RootLayout({
       <head>
         <AuthGuardScript />
       </head>
-      <body>{children}</body>
+      <body><TelemetryBootstrap />{children}</body>
     </html>
   );
 }

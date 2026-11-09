@@ -60,6 +60,16 @@ npm --prefix uis/backoffice run dev
 
 Use the printed backoffice URL, sign in, and select Incident Manager. The API defaults to `http://localhost:8000`; if needed, set `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` in `uis/backoffice/.env.local` and restart the frontend. Production `npm run start` requires `npm run build` first; public API URLs are baked into that build.
 
+Telemetry capture is controlled in the browser build by
+`NEXT_PUBLIC_TELEMETRY_ENABLED` (unset/anything except `false` enables it) and
+on the API by `TELEMETRY_ENABLED` (default `true`). The browser queue is
+best-effort, in-memory, capped at 20 events, and drops failed sends after three
+attempts. The current API route only validates and acknowledges events; Part 3
+storage has not been enabled. `userId` is an opaque UUID generated per signed-in
+tab session, rotated on login and cleared on logout; it cannot support
+cross-session analytics. Inventory order events are not emitted until a stable
+approved client ID mapping is available.
+
 1. Before creating records, check Summary against the API README's expected 95-record totals. Re-running the seed must not change them. Later browser-created incidents increase these totals.
 2. Submit the empty registration form. Required-field errors must appear beside the fields without sending a request. Capture the PR validation screenshot here.
 3. Choose Origin = Branch. The Branch field must be highlighted and show Central, Los Angeles Warehouse/Office, and Zaragoza Warehouse/Office with the briefing's full labels. It remains required and visible for every origin.
