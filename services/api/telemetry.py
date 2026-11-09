@@ -11,6 +11,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ValidationError, root_validator
+from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
@@ -18,8 +20,8 @@ MAX_BATCH_EVENTS = 20
 MAX_BATCH_BYTES = 64 * 1024
 SCHEMA_VERSION = "1.0.0"
 
-# The receiver is deliberately an in-memory capture stub. It validates and
-# acknowledges telemetry without persisting it or logging event properties.
+# Keep the event contract explicit: unrecognized event types and properties
+# are rejected before any database access.
 EVENT_PROPERTIES: dict[str, tuple[set[str], set[str]]] = {
     "inbound_order_created": ({"warehouse", "client_id", "product_id", "product_category", "quantity"}, {"warehouse", "client_id", "product_id", "product_category", "quantity"}),
     "outbound_order_created": ({"warehouse", "client_id", "product_id", "product_category", "quantity"}, {"warehouse", "client_id", "product_id", "product_category", "quantity"}),
@@ -138,7 +140,45 @@ class TelemetryBatch(BaseModel):
 
 
 def telemetry_enabled() -> bool:
-    return os.getenv("TELEMETRY_ENABLED", "true").strip().lower() not in {"0", "false", "no", "off"}
+    return os.getenv("TELEMETRY_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _storage_rows(events: list[TelemetryEvent]) -> list[dict[str, Any]]:
+    return [
+        {
+            "event_id": event.eventId,
+            "event_type": event.event_type,
+            "event_timestamp": event.timestamp,
+            "properties": json.dumps(event.properties, allow_nan=False),
+            "session_id": event.sessionId,
+            "user_id": event.userId,
+            "schema_version": event.schemaVersion,
+            "request_id": event.requestId,
+        }
+        for event in events
+    ]
+
+
+def persist_events(events: list[TelemetryEvent]) -> None:
+    """Persist one validated batch atomically using the server DB connection.
+
+    The table is provisioned separately in Supabase; this path never creates
+    or alters schema. Properties are explicitly cast to JSONB by PostgreSQL.
+    """
+    from services.api.inventory_database import engine
+
+    statement = text(
+        """
+        INSERT INTO public.telemetry_events
+            (event_id, event_type, event_timestamp, properties, session_id,
+             user_id, schema_version, request_id)
+        VALUES
+            (:event_id, :event_type, :event_timestamp, CAST(:properties AS jsonb),
+             :session_id, :user_id, :schema_version, :request_id)
+        """
+    )
+    with engine.begin() as connection:
+        connection.execute(statement, _storage_rows(events))
 
 
 @router.post("/events", status_code=status.HTTP_202_ACCEPTED)
@@ -158,6 +198,16 @@ async def capture_telemetry(request: Request) -> dict[str, int]:
     except (json.JSONDecodeError, ValidationError, ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Telemetry batch rejected.") from None
 
-    # No event properties, identities or IDs are written to logs or storage.
-    logger.info("Telemetry capture accepted event_count=%d", len(batch.events))
+    try:
+        await run_in_threadpool(persist_events, batch.events)
+    except Exception:
+        # Avoid logging DB exception text: drivers may include SQL or values.
+        logger.error("Telemetry persistence failed event_count=%d", len(batch.events))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telemetry batch could not be stored.",
+        ) from None
+
+    # Do not log event properties, identities, IDs, or database error details.
+    logger.info("Telemetry capture persisted event_count=%d", len(batch.events))
     return {"accepted": len(batch.events)}

@@ -4,16 +4,25 @@ The password recovery flow sends reset links through Resend. Copy the root `.env
 
 The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` defaults to 30, and `BACKOFFICE_URL` defaults to `http://localhost:3000`; the generated reset link points to the backoffice app. `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` configures the backoffice API address.
 
-## Telemetry capture (Part 2)
+## Telemetry capture (Part 3)
 
 `POST /api/telemetry/events` accepts a strict batch of up to 20 allowlisted
-events (64 KiB total). `TELEMETRY_ENABLED` defaults to `true`; set it to
-`false` to disable capture. This milestone validates and acknowledges batches
-in memory only: it does not persist events. Logs contain accepted counts only,
-never event properties or identity values. The backoffice browser service sends
-best-effort batches and drops them after bounded retries. Do not enable the
-receiver for a public deployment without the planned rate limits and storage
-access controls.
+events (64 KiB total). `TELEMETRY_ENABLED` defaults to `false`; set it to
+`true` to enable capture. Validated batches are inserted atomically into the
+pre-provisioned `public.telemetry_events` table using the API's server-side
+`DATABASE_URL` connection. The API does not create or alter the telemetry
+schema. A storage failure returns `503`, so batches are never reported as
+accepted unless the transaction succeeds. Logs contain event counts only,
+never properties, identity values, or database exception details. The
+backoffice browser service sends best-effort batches and drops them after
+bounded retries. Keep the Supabase connection string server-side; never expose
+it through a `NEXT_PUBLIC_*` variable. Ensure the database role has only the
+permissions required to insert into the telemetry table.
+
+The target table has columns `event_id`, `event_type`, `event_timestamp`,
+`properties`, `session_id`, `user_id`, `schema_version`, and `request_id`.
+Schema setup and RLS are managed separately in Supabase; this code performs no
+DDL. Tests mock the persistence boundary and never connect to Supabase.
 
 Reset links and recipient addresses are not printed by default. For local development only, explicitly set `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in the root `.env` to print a usable reset link when Resend is unavailable. Restart the API after changing the setting. Never enable this in production or shared logs; console links are credentials. Real email still requires a valid Resend key and sender.
 
@@ -106,4 +115,4 @@ All handled API errors now return JSON with `message`, a compatibility `detail`,
 
 Internal exception text, request passwords, connection details, and reset tokens are never included in normal error responses. CSV structure is validated before processing. Database conflicts have a dedicated exception type so corrupt storage is not mistaken for an input conflict.
 
-See `docs/ERROR_HANDLING.md` for the audit, browser checks, and automated verification commands.
+See `docs/ERROR_HANDLING.md` for the audit, browser checks, and automated verification commands.

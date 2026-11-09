@@ -3,6 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
+
+from services.api import telemetry as telemetry_module
+
+
+@pytest.fixture(autouse=True)
+def mock_telemetry_storage(monkeypatch):
+    monkeypatch.setenv("TELEMETRY_ENABLED", "true")
+    monkeypatch.setattr(telemetry_module, "persist_events", lambda _events: None)
 
 def _event(event_type: str = "navigation_page_viewed", properties: dict | None = None) -> dict:
     return {
@@ -21,6 +30,37 @@ def test_accepts_valid_event_batch(client):
     response = client.post("/api/telemetry/events", json={"events": [_event()]})
     assert response.status_code == 202
     assert response.json() == {"accepted": 1}
+
+
+def test_maps_validated_event_to_supabase_columns():
+    event = telemetry_module.TelemetryEvent.parse_obj(_event())
+
+    row = telemetry_module._storage_rows([event])[0]
+
+    assert set(row) == {
+        "event_id", "event_type", "event_timestamp", "properties",
+        "session_id", "user_id", "schema_version", "request_id",
+    }
+    assert row["event_id"] == event.eventId
+    assert row["event_timestamp"] == event.timestamp
+    assert row["session_id"] == event.sessionId
+    assert row["user_id"] == event.userId
+    assert row["request_id"] == event.requestId
+    assert row["properties"] == '{"route": "/"}'
+
+
+def test_does_not_acknowledge_batch_when_persistence_fails(client, monkeypatch):
+    monkeypatch.setattr(
+        telemetry_module,
+        "persist_events",
+        lambda _events: (_ for _ in ()).throw(RuntimeError("sensitive db detail")),
+    )
+
+    response = client.post("/api/telemetry/events", json={"events": [_event()]})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Telemetry batch could not be stored."}
+    assert "sensitive db detail" not in response.text
 
 
 def test_rejects_unknown_properties(client):

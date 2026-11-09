@@ -57,26 +57,30 @@
   mandatory event triggers not yet implemented in the app (stock threshold,
   direct stock write rejection, physical discrepancy) and a missing stable
   client ID mapping; do not fabricate those events/dimensions.
-- Parts 2–4 remain to be implemented in order. Part 3 requires a user-operated
-  Supabase table setup and confirmation before using the database; pause and ask
-  the user at that point. Part 4 report data also depends on real telemetry rows.
-- Part 2 is implemented as a best-effort capture slice: a strict, non-persistent
-  FastAPI receiver; tab-scoped random UUID identities; bounded browser batching;
-  safe login and inventory-list instrumentation; and API/browser feature toggles.
-  Unsupported order, threshold, direct-edit, and physical-count triggers remain
-  un-emitted; no Supabase persistence was added.
+- Supabase setup for Part 3 was completed and verified by the user: the
+  eight-column `public.telemetry_events` table, three requested indexes, PK,
+  and RLS are present. Part 4 report data still depends on real telemetry rows.
+- The strict FastAPI receiver persists validated batches atomically into the
+  existing telemetry table via the server-only `DATABASE_URL`; it returns 503
+  on storage failure and logs event counts only. Tests mock the database boundary
+  and never contact Supabase.
+- Tab-scoped random UUID identities, bounded browser batching, safe login and
+  inventory-list instrumentation, and API/browser feature toggles remain in
+  place. Unsupported order, threshold, direct-edit, and physical-count triggers
+  remain un-emitted; do not fabricate those events/dimensions.
 - Part 2 validation: **9 focused backend tests passed**, backoffice typecheck
   passed, and **4 focused frontend telemetry tests passed**. The schema JSON
   parses and its 17 event types match the browser allowlist. Python 3.14 emits
   dependency deprecation warnings in the focused run. Production capture defaults
   off; enable it explicitly only after deployment protections are ready.
-- Next checkpoint: do not begin Part 3 persistence until the user has operated
-  and confirmed Supabase table setup. Part 4 reports must use actual persisted
-  events, not synthetic or accepted-but-unpersisted capture requests.
+- Production telemetry capture defaults off; enable it explicitly with
+  `TELEMETRY_ENABLED=true` and `NEXT_PUBLIC_TELEMETRY_ENABLED=true` after
+  verifying server-side database permissions and deployment controls. Part 4
+  reports must use actual persisted events, not synthetic or unpersisted requests.
 - Approved identity choice: `userId` is an independent opaque random UUID scoped
   to an authenticated session, rotated with `sessionId` on login and cleared on
   logout/session expiry. No raw account ID or cross-session joins. Part 2 capture
-  implementation is now in progress; no Supabase persistence before confirmation.
+  implementation now persists only after the user-confirmed Supabase setup.
 
 ## Completed
 
