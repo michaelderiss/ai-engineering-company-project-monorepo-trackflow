@@ -63,9 +63,11 @@ Use the printed backoffice URL, sign in, and select Incident Manager. The API de
 Telemetry capture is controlled in the browser build by
 `NEXT_PUBLIC_TELEMETRY_ENABLED` (unset/anything except `false` enables it) and
 on the API by `TELEMETRY_ENABLED` (default `true`). The browser queue is
+on the API by `TELEMETRY_ENABLED` (default `false`). The browser queue is
 best-effort, in-memory, capped at 20 events, and drops failed sends after three
-attempts. The current API route only validates and acknowledges events; Part 3
-storage has not been enabled. `userId` is an opaque UUID generated per signed-in
+attempts. The API persists valid batches to the pre-provisioned Supabase table;
+database failures return 503 and are retried only within the browser's bounded
+retry policy. `userId` is an opaque UUID generated per signed-in
 tab session, rotated on login and cleared on logout; it cannot support
 cross-session analytics. Inventory order events are not emitted until a stable
 approved client ID mapping is available.

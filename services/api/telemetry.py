@@ -160,11 +160,7 @@ def _storage_rows(events: list[TelemetryEvent]) -> list[dict[str, Any]]:
 
 
 def persist_events(events: list[TelemetryEvent]) -> None:
-    """Persist one validated batch atomically using the server DB connection.
-
-    The table is provisioned separately in Supabase; this path never creates
-    or alters schema. Properties are explicitly cast to JSONB by PostgreSQL.
-    """
+    """Persist one validated batch atomically in the pre-provisioned table."""
     from services.api.inventory_database import engine
 
     statement = text(
@@ -175,6 +171,7 @@ def persist_events(events: list[TelemetryEvent]) -> None:
         VALUES
             (:event_id, :event_type, :event_timestamp, CAST(:properties AS jsonb),
              :session_id, :user_id, :schema_version, :request_id)
+        ON CONFLICT (event_id) DO NOTHING
         """
     )
     with engine.begin() as connection:
