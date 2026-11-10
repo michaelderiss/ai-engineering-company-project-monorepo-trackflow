@@ -57,32 +57,35 @@
   mandatory event triggers not yet implemented in the app (stock threshold,
   direct stock write rejection, physical discrepancy) and a missing stable
   client ID mapping; do not fabricate those events/dimensions.
-- Parts 2–4 remain to be implemented in order. Part 3 requires a user-operated
-- Part 3 persistence is implemented against the user's pre-provisioned Supabase
-  `public.telemetry_events` table via the server-only `DATABASE_URL`; no DDL or
-  schema migration is run by the API. Validated batches are written atomically,
-  duplicate `event_id` retries are ignored, storage failures return 503, and
-  persistence logs contain counts only. Automated tests mock this boundary.
-- Part 2 remains a best-effort capture slice: tab-scoped random UUID identities,
-  bounded browser batching, safe login and inventory-list instrumentation, and
-  API/browser feature toggles. Unsupported order, threshold, direct-edit, and
-  physical-count triggers remain un-emitted; stable client ID mapping is still
-  unavailable. Production capture defaults off.
-- Part 2 validation: **9 focused backend tests passed**, backoffice typecheck
-  passed, and **4 focused frontend telemetry tests passed**. The schema JSON
-  parses and its 17 event types match the browser allowlist. Python 3.14 emits
-  dependency deprecation warnings in the focused run. Production capture defaults
-  off; enable it explicitly only after deployment protections are ready.
-- Next checkpoint: do not begin Part 3 persistence until the user has operated
-- Part 4 reports must use actual persisted events, not synthetic or
-  accepted-but-unpersisted capture requests. Validate deployment rate limits,
-  database permissions, and ingestion configuration before enabling production
-  capture.
-  implementation writes only after the user-confirmed Supabase setup.
+- Part 2 capture uses a strict browser event allowlist, tab-scoped random UUID
+  identities, bounded best-effort batches, and safe login/catalog-load
+  instrumentation. It does not yet implement all proposed client-side
+  opportunities (notably errors, Web Vitals, API latency, or successful order
+  commits), and the three unavailable mandatory domain triggers remain
+  intentionally un-emitted.
+- Part 3 now validates each event independently and persists valid events via a
+  single parameterized bulk insert with duplicate-ID idempotency. Supabase table
+  setup and indexes were confirmed by the user; this workspace's own DB
+  connection attempt failed, so no live read/write was verified.
+- Part 4 adds Pandas-backed daily event volume, API error rate, and route latency
+  metrics plus an authenticated manager/admin `GET /api/telemetry/report` API.
+  It uses an inclusive-start/exclusive-end UTC period, defaults to the prior
+  seven days, filters event kinds/time in SQL, and caches serialized responses
+  for 60 seconds. Until the live database is reachable and actual events exist,
+  the report may return empty arrays.
+- Validation: **190 backend tests passed**, including 17 focused telemetry
+  API/report tests; **36 frontend tests passed** and the backoffice TypeScript
+  typecheck passed. Python 3.14/FastAPI-Starlette/httpx deprecation warnings
+  remain. These tests mock persistence/report reads; no live Supabase data or
+  end-to-end persistence claim is made.
+- Remaining implementation prerequisite: stable client ID mapping, real
+  threshold-crossing source, actual direct-stock-write rejection boundary, and
+  physical count/audit workflow are needed before the mandatory inventory
+  events can be fully emitted end-to-end. Public deployment also needs database
+  grants and ingestion rate limits reviewed.
 - Approved identity choice: `userId` is an independent opaque random UUID scoped
   to an authenticated session, rotated with `sessionId` on login and cleared on
-  logout/session expiry. No raw account ID or cross-session joins. Part 2 capture
-  implementation is now in progress; no Supabase persistence before confirmation.
+  logout/session expiry. No raw account ID or cross-session joins.
 
 ## Completed
 

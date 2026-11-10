@@ -5,23 +5,28 @@ import logging
 import math
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ValidationError, root_validator
 from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
+from services.api.auth import get_current_user
+from services.api.cache import TTLCache, cached_json
+from services.api.models import Role, User
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
+report_cache = TTLCache(ttl=60, max_entries=128, max_value_bytes=1024 * 1024)
 MAX_BATCH_EVENTS = 20
 MAX_BATCH_BYTES = 64 * 1024
 SCHEMA_VERSION = "1.0.0"
 
-# Keep the event contract explicit: unrecognized event types and properties
-# are rejected before any database access.
+# Event/property allowlists are deliberately explicit and kept aligned with
+# docs/telemetry/event-schemas.json.
 EVENT_PROPERTIES: dict[str, tuple[set[str], set[str]]] = {
     "inbound_order_created": ({"warehouse", "client_id", "product_id", "product_category", "quantity"}, {"warehouse", "client_id", "product_id", "product_category", "quantity"}),
     "outbound_order_created": ({"warehouse", "client_id", "product_id", "product_category", "quantity"}, {"warehouse", "client_id", "product_id", "product_category", "quantity"}),
@@ -132,53 +137,63 @@ class TelemetryEvent(BaseModel):
         return values
 
 
-class TelemetryBatch(BaseModel):
-    events: list[TelemetryEvent]
-
-    class Config:
-        extra = "forbid"
-
-
 def telemetry_enabled() -> bool:
-    return os.getenv("TELEMETRY_ENABLED", "false").strip().lower() not in {"0", "false", "no", "off"}
+    return os.getenv("TELEMETRY_ENABLED", "true").strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _storage_rows(events: list[TelemetryEvent]) -> list[dict[str, Any]]:
     return [
         {
-            "event_id": event.eventId,
+            "event_id": str(event.eventId),
             "event_type": event.event_type,
             "event_timestamp": event.timestamp,
-            "properties": json.dumps(event.properties, allow_nan=False),
-            "session_id": event.sessionId,
-            "user_id": event.userId,
+            "session_id": str(event.sessionId) if event.sessionId else None,
+            "user_id": str(event.userId) if event.userId else None,
             "schema_version": event.schemaVersion,
-            "request_id": event.requestId,
+            "request_id": str(event.requestId),
+            "properties": json.dumps(event.properties, allow_nan=False),
         }
         for event in events
     ]
 
 
-def persist_events(events: list[TelemetryEvent]) -> None:
-    """Persist one validated batch atomically in the pre-provisioned table."""
+def persist_events(events: list[TelemetryEvent]) -> int:
+    """Insert a validated batch in one transaction and one bulk SQL statement."""
+    if not events:
+        return 0
+
     from services.api.inventory_database import engine
 
+    rows = _storage_rows(events)
+    columns = (
+        "event_id", "event_type", "event_timestamp", "session_id", "user_id",
+        "schema_version", "request_id", "properties",
+    )
+    value_groups: list[str] = []
+    parameters: dict[str, Any] = {}
+    for index, row in enumerate(rows):
+        placeholders = []
+        for column in columns:
+            name = f"{column}_{index}"
+            parameters[name] = row[column]
+            placeholders.append(
+                f"CAST(:{name} AS jsonb)" if column == "properties" else f":{name}"
+            )
+        value_groups.append(f"({', '.join(placeholders)})")
+
     statement = text(
-        """
-        INSERT INTO public.telemetry_events
-            (event_id, event_type, event_timestamp, properties, session_id,
-             user_id, schema_version, request_id)
-        VALUES
-            (:event_id, :event_type, :event_timestamp, CAST(:properties AS jsonb),
-             :session_id, :user_id, :schema_version, :request_id)
-        ON CONFLICT (event_id) DO NOTHING
-        """
+        "INSERT INTO public.telemetry_events "
+        "(event_id, event_type, event_timestamp, session_id, user_id, "
+        "schema_version, request_id, properties) VALUES "
+        + ", ".join(value_groups)
+        + " ON CONFLICT (event_id) DO NOTHING RETURNING event_id"
     )
     with engine.begin() as connection:
-        connection.execute(statement, _storage_rows(events))
+        inserted = connection.execute(statement, parameters).fetchall()
+    return len(inserted)
 
 
-@router.post("/events", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/events", status_code=status.HTTP_200_OK)
 async def capture_telemetry(request: Request) -> dict[str, int]:
     if not telemetry_enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
@@ -191,20 +206,73 @@ async def capture_telemetry(request: Request) -> dict[str, int]:
         payload = json.loads(body)
         if not isinstance(payload, dict) or not isinstance(payload.get("events"), list) or not 1 <= len(payload["events"]) <= MAX_BATCH_EVENTS:
             raise ValueError("Invalid telemetry batch.")
-        batch = TelemetryBatch.parse_obj(payload)
-    except (json.JSONDecodeError, ValidationError, ValueError, TypeError):
+        raw_events = payload["events"]
+    except (json.JSONDecodeError, ValueError, TypeError):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Telemetry batch rejected.") from None
 
+    valid_events: list[TelemetryEvent] = []
+    rejected = 0
+    for raw_event in raw_events:
+        if not isinstance(raw_event, dict):
+            rejected += 1
+            continue
+        try:
+            # parse_obj is Pydantic v1's equivalent of model_validate.
+            valid_events.append(TelemetryEvent.parse_obj(raw_event))
+        except (ValidationError, ValueError, TypeError):
+            rejected += 1
+
     try:
-        await run_in_threadpool(persist_events, batch.events)
+        stored = await run_in_threadpool(persist_events, valid_events)
     except Exception:
-        # Avoid logging DB exception text: drivers may include SQL or values.
-        logger.error("Telemetry persistence failed event_count=%d", len(batch.events))
+        logger.error("Telemetry persistence failed received=%d valid=%d", len(raw_events), len(valid_events))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Telemetry batch could not be stored.",
         ) from None
 
-    # Do not log event properties, identities, IDs, or database error details.
-    logger.info("Telemetry capture persisted event_count=%d", len(batch.events))
-    return {"accepted": len(batch.events)}
+    rejected += len(valid_events) - stored
+    logger.info("Telemetry batch processed received=%d stored=%d rejected=%d", len(raw_events), stored, rejected)
+    return {"received": len(raw_events), "stored": stored, "rejected": rejected}
+
+
+def _parse_report_date(value: str | None, default: datetime) -> datetime:
+    if value is None:
+        return default
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Report dates must be ISO-8601 datetimes.") from None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise HTTPException(status_code=422, detail="Report dates must include a timezone.")
+    return parsed.astimezone(timezone.utc)
+
+
+@router.get("/report")
+def telemetry_report(
+    start: str | None = Query(default=None, alias="from"),
+    end: str | None = Query(default=None, alias="to"),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return cached operational/technical metrics for a UTC half-open period."""
+    if current_user.role not in {Role.ADMIN, Role.MANAGER}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions.")
+    # Minute precision gives omitted-date requests a stable cache key while
+    # keeping the default reporting window effectively current.
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    period_end = _parse_report_date(end, now)
+    period_start = _parse_report_date(start, period_end - timedelta(days=7))
+    if period_start >= period_end:
+        raise HTTPException(status_code=422, detail="Report start must be before report end.")
+
+    from services.telemetry.analysis import build_technical_report
+
+    cache_key = (period_start.isoformat(), period_end.isoformat())
+    return cached_json(
+        report_cache,
+        cache_key,
+        lambda: {
+            "period": {"from": period_start.isoformat(), "to": period_end.isoformat()},
+            "metrics": build_technical_report(period_start, period_end),
+        },
+    )

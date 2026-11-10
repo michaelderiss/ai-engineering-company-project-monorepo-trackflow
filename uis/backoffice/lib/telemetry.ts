@@ -6,7 +6,8 @@ export const TELEMETRY_ENDPOINT = "/api/telemetry/events";
 const SCHEMA_VERSION = "1.0.0";
 const MAX_EVENTS = 20;
 const FLUSH_INTERVAL_MS = 10_000;
-const MAX_ATTEMPTS = 3;
+// Initial attempt plus up to three retries (1s, 2s, 4s).
+const MAX_ATTEMPTS = 4;
 
 export const TELEMETRY_EVENT_TYPES = [
   "inbound_order_created", "outbound_order_created", "stock_threshold_triggered",

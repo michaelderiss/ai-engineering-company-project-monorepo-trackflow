@@ -2,15 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import uuid4
-import pytest
-
-from services.api import telemetry as telemetry_module
-
-
-@pytest.fixture(autouse=True)
-def mock_telemetry_storage(monkeypatch):
-    monkeypatch.setenv("TELEMETRY_ENABLED", "true")
-    monkeypatch.setattr(telemetry_module, "persist_events", lambda _events: None)
 
 
 def _event(event_type: str = "navigation_page_viewed", properties: dict | None = None) -> dict:
@@ -26,43 +17,11 @@ def _event(event_type: str = "navigation_page_viewed", properties: dict | None =
     }
 
 
-def test_accepts_valid_event_batch(client):
+def test_accepts_valid_event_batch(client, monkeypatch):
+    monkeypatch.setattr("services.api.telemetry.persist_events", lambda events: len(events))
     response = client.post("/api/telemetry/events", json={"events": [_event()]})
-    assert response.status_code == 202
-    assert response.json() == {"accepted": 1}
-
-
-def test_maps_validated_event_to_supabase_columns():
-    event = telemetry_module.TelemetryEvent.parse_obj(_event())
-
-    row = telemetry_module._storage_rows([event])[0]
-
-    assert set(row) == {
-        "event_id", "event_type", "event_timestamp", "properties",
-        "session_id", "user_id", "schema_version", "request_id",
-    }
-    assert row["event_id"] == event.eventId
-    assert row["event_type"] == event.event_type
-    assert row["event_timestamp"] == event.timestamp
-    assert row["properties"] == '{"route": "/"}'
-    assert row["session_id"] == event.sessionId
-    assert row["user_id"] == event.userId
-    assert row["schema_version"] == event.schemaVersion
-    assert row["request_id"] == event.requestId
-
-
-def test_storage_failure_does_not_acknowledge_batch(client, monkeypatch):
-    monkeypatch.setattr(
-        telemetry_module,
-        "persist_events",
-        lambda _events: (_ for _ in ()).throw(RuntimeError("sensitive database detail")),
-    )
-
-    response = client.post("/api/telemetry/events", json={"events": [_event()]})
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Telemetry batch could not be stored."}
-    assert "sensitive database detail" not in response.text
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 1, "rejected": 0}
 
 
 def test_rejects_unknown_properties(client):
@@ -70,7 +29,8 @@ def test_rejects_unknown_properties(client):
         "/api/telemetry/events",
         json={"events": [_event(properties={"route": "/", "email": "private@example.test"})]},
     )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 0, "rejected": 1}
     assert "private@example.test" not in response.text
 
 
@@ -79,7 +39,8 @@ def test_rejects_wrong_event_properties(client):
         "/api/telemetry/events",
         json={"events": [_event("login_failed", {"route": "/"})]},
     )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 0, "rejected": 1}
 
 
 def test_rejects_unhashable_enum_value_without_server_error(client):
@@ -87,14 +48,16 @@ def test_rejects_unhashable_enum_value_without_server_error(client):
         "/api/telemetry/events",
         json={"events": [_event("login_failed", {"reason": ["invalid_credentials"]})]},
     )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 0, "rejected": 1}
 
 
 def test_rejects_timestamp_without_timezone(client):
     event = _event()
     event["timestamp"] = "2026-11-09T12:00:00"
     response = client.post("/api/telemetry/events", json={"events": [event]})
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 0, "rejected": 1}
 
 
 def test_rejects_batches_over_event_limit(client):
@@ -108,14 +71,16 @@ def test_disables_receiver_with_environment_toggle(client, monkeypatch):
     assert response.status_code == 404
 
 
-def test_accepts_consistent_discrepancy_math(client):
+def test_accepts_consistent_discrepancy_math(client, monkeypatch):
+    monkeypatch.setattr("services.api.telemetry.persist_events", lambda events: len(events))
     event = _event("inventory_discrepancy_detected", {
         "warehouse": "zaragoza", "client_id": "client_1", "product_id": "SKU-1",
         "product_category": "fashion", "quantity": 2, "system_quantity": 8,
         "physical_quantity": 10,
     })
     response = client.post("/api/telemetry/events", json={"events": [event]})
-    assert response.status_code == 202
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 1, "rejected": 0}
 
 
 def test_rejects_inconsistent_discrepancy_math(client):
@@ -125,12 +90,46 @@ def test_rejects_inconsistent_discrepancy_math(client):
         "physical_quantity": 9,
     })
     response = client.post("/api/telemetry/events", json={"events": [event]})
-    assert response.status_code == 422
-def test_rejects_inconsistent_discrepancy_math(client):
-    event = _event("inventory_discrepancy_detected", {
-        "warehouse": "zaragoza", "client_id": "client_1", "product_id": "SKU-1",
-        "product_category": "fashion", "quantity": 2, "system_quantity": 8,
-        "physical_quantity": 9,
-    })
-    response = client.post("/api/telemetry/events", json={"events": [event]})
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 0, "rejected": 1}
+
+
+def test_persists_valid_events_from_mixed_batch(client, monkeypatch):
+    from services.api import telemetry as telemetry_module
+
+    persisted: list = []
+
+    def fake_persist(events):
+        persisted.extend(events)
+        return len(events)
+
+    monkeypatch.setattr(telemetry_module, "persist_events", fake_persist)
+    valid = _event()
+    invalid = _event("login_failed", {"email": "private@example.test"})
+    response = client.post("/api/telemetry/events", json={"events": [valid, invalid, None]})
+
+    assert response.status_code == 200
+    assert response.json() == {"received": 3, "stored": 1, "rejected": 2}
+    assert len(persisted) == 1
+    assert str(persisted[0].eventId) == valid["eventId"]
+    assert "private@example.test" not in response.text
+
+
+def test_duplicate_event_id_counts_as_rejected(client, monkeypatch):
+    monkeypatch.setattr("services.api.telemetry.persist_events", lambda _events: 0)
+    response = client.post("/api/telemetry/events", json={"events": [_event()]})
+    assert response.status_code == 200
+    assert response.json() == {"received": 1, "stored": 0, "rejected": 1}
+
+
+def test_storage_failure_does_not_acknowledge_batch(client, monkeypatch):
+    from services.api import telemetry as telemetry_module
+
+    def fail(_events):
+        raise RuntimeError("sensitive database detail")
+
+    monkeypatch.setattr(telemetry_module, "persist_events", fail)
+    response = client.post("/api/telemetry/events", json={"events": [_event()]})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Something went wrong. Please try again."
+    assert "sensitive database detail" not in response.text

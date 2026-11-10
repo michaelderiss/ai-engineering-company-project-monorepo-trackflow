@@ -4,26 +4,34 @@ The password recovery flow sends reset links through Resend. Copy the root `.env
 
 The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` defaults to 30, and `BACKOFFICE_URL` defaults to `http://localhost:3000`; the generated reset link points to the backoffice app. `NEXT_PUBLIC_INCIDENTS_API_BASE_URL` configures the backoffice API address.
 
-## Telemetry capture (Part 2)
-## Telemetry capture (Part 3)
+## Telemetry capture, storage, and report (Parts 2–4)
 
 `POST /api/telemetry/events` accepts a strict batch of up to 20 allowlisted
-events (64 KiB total). `TELEMETRY_ENABLED` defaults to `false`; set it to
-`true` to enable ingestion. Validated batches are inserted atomically into the
-existing `public.telemetry_events` table through the server-side
-`DATABASE_URL`. The API does not create or alter telemetry schema. A storage
-failure returns `503`, and the browser service retries only a bounded number
-of times. Logs contain event counts only, never properties, identity values,
-or database exception details. Keep the Supabase connection string server-side,
-never expose it via a `NEXT_PUBLIC_*` variable, and grant the database role
-only the required insert permissions.
+events (64 KiB total), validates each event independently, and persists valid
+events in one bulk PostgreSQL insert. Its response reports `received`,
+`stored`, and `rejected`; duplicate event IDs are ignored idempotently and count
+as rejected. Logs contain counts only, never event properties or identity
+values. The browser service sends best-effort batches and drops them after
+bounded retries. `TELEMETRY_ENABLED` defaults to `true`; set it to `false` to
+disable event capture.
 
-The existing table must contain `event_id`, `event_type`, `event_timestamp`,
-`properties`, `session_id`, `user_id`, `schema_version`, and `request_id`.
-Schema setup, indexes, and RLS are managed separately in Supabase; this code
-performs no DDL. Tests mock persistence and never connect to Supabase. The
-route is disabled by default; enable it only after deployment rate limits and
-database access controls are ready.
+`GET /api/telemetry/report` is restricted to authenticated managers/admins.
+Optional `from` and `to` query parameters must be timezone-aware ISO-8601
+datetimes; the report uses a half-open `[from, to)` UTC period and defaults to
+the last seven days. It returns daily event volume, API error rate, and API
+latency grouped by day/route. Metrics are computed with Pandas after SQL filters
+event types and time bounds, and the serialized report is cached for 60 seconds
+per period. Reports are technical/operational only; no warehouse business
+metric is inferred from unavailable or unpersisted events.
+
+The `public.telemetry_events` table is expected to be created and access
+controlled in Supabase before deployment. Keep row-level security enabled and
+grant the API database role only the required insert/select privileges. This
+workspace could not establish a live Supabase connection during verification,
+so no live read/write or report-data claim is made. The report can legitimately
+return empty metric arrays until persisted events exist. Do not enable capture
+for a public deployment without rate limits and appropriate database access
+controls.
 
 Reset links and recipient addresses are not printed by default. For local development only, explicitly set `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in the root `.env` to print a usable reset link when Resend is unavailable. Restart the API after changing the setting. Never enable this in production or shared logs; console links are credentials. Real email still requires a valid Resend key and sender.
 
