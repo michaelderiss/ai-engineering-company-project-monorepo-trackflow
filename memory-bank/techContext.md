@@ -1,5 +1,23 @@
 # Technical Context
 
+## Telemetry Event Storage
+
+- Telemetry persistence uses the dedicated PostgreSQL engine in
+  `services/api/telemetry_database.py`; it requires TLS and
+  `TELEMETRY_DATABASE_URL`, leaving inventory's `DATABASE_URL` isolated.
+- `services/telemetry/schema.sql` is the idempotent Supabase setup; the API
+  ingestion route is `/api/telemetry/events`. Server emitters share the same
+  strict schema/allowlist and use null session/user IDs rather than account data.
+- Technical request timing is emitted from FastAPI middleware; supplier outcome
+  events are emitted by the supplier service routes after a persisted mutation
+  or a real not-found failure. No frontend instrumentation is required for these
+  server-side event types.
+- `GET /telemetry/report` and `/api/telemetry/report` require manager/admin
+  authentication and query the telemetry engine over a UTC half-open date range.
+  `services/telemetry/analysis.py` reports daily event volume, daily API error
+  ratio, and mean/p95 latency by canonical route; it uses standard-library
+  aggregation and does not add a dashboard or separate auth metric.
+
 ## Current repository baseline
 
 This repository now combines three active implementation layers:
