@@ -351,3 +351,12 @@
   - `uis/backoffice`: `npm run build` succeeded
 
 This is the current working baseline to preserve before additional feature work or remote merges.
+
+## Business Warehouse Performance Reporting (partial)
+
+- Added the separate `services/reporting/` API surface for weekly warehouse/client KPI results, latest pipeline run metadata, and manual run requests. `services/api/main.py` registers it without changing telemetry capture or the technical telemetry report.
+- Added a reporting store that creates the dedicated `reporting` schema/tables and upserts weekly KPI rows by `(warehouse, client_id, week_start)`. The report contract includes the four scoped business KPIs and uses the latest computed week when `week_start` is omitted.
+- Added the backoffice `/reporting` page and Operations Home entry. The view labels all four KPIs, the week covered, warehouse/client, and latest run metadata.
+- Added reporting endpoint/store tests; **7 targeted tests passed** in a temporary Python environment. Backoffice TypeScript typecheck passed and **36 Jest tests passed**.
+- The required design and Prefect implementation remain blocked: policy denied file creation in `data/pipelines/` and `data/process/`. No alternate-path workaround was attempted. Until the runtime is approved and added, the manual trigger returns an explicit 503. Full pipeline CLI, transformation isolation tests, and end-to-end live database verification remain outstanding.
+- Prefect 3 is isolated from the API dependency set because its Pydantic 2 requirement conflicts with the existing FastAPI 0.99/Pydantic 1 API. The pipeline needs its own configured interpreter/environment.

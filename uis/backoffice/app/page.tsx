@@ -11,6 +11,12 @@ type AppOption = {
 
 const APP_OPTIONS: AppOption[] = [
   {
+    id: "reporting",
+    label: "Warehouse Performance Report",
+    description: "Review weekly inbound volume, outbound throughput, stockout frequency, and discrepancy rate by warehouse and client.",
+    path: "/reporting",
+  },
+  {
     id: "incidents",
     label: "Incident Manager",
     description: "Register and track incidents across TrackFlow facilities.",

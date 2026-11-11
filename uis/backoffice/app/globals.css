@@ -355,6 +355,81 @@ nav.top-nav .nav-link:hover {
   .inventory-nav a { text-align: center; }
   .inventory-stock-preview { align-items: flex-start; flex-direction: column; }
 }
+.warehouse-reporting {
+  max-width: 1280px;
+}
+.reporting-eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.warehouse-reporting h1 {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 1.8rem;
+}
+.reporting-run-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.reporting-run-panel h2,
+.reporting-results h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.15rem;
+}
+.reporting-run-panel p {
+  margin: 0.25rem 0;
+  color: var(--muted);
+}
+.reporting-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.reporting-secondary-button {
+  color: var(--ink);
+  background: #e5efff;
+}
+.reporting-feedback {
+  color: var(--muted);
+}
+.reporting-results {
+  padding-top: 1.5rem;
+}
+.reporting-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+.reporting-table {
+  min-width: 900px;
+}
+.reporting-table th {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.reporting-table th small {
+  font-weight: 400;
+  text-transform: none;
+}
+.reporting-table td {
+  vertical-align: middle;
+}
+.reporting-subvalue {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+@media (max-width: 640px) {
+  .warehouse-reporting h1 { font-size: 1.5rem; }
+  .reporting-actions { width: 100%; }
+  .reporting-actions button { flex: 1; }
+}
+
 .trackflow-site {
   color: var(--ink);
   background: transparent;

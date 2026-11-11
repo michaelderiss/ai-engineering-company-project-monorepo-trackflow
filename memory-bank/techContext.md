@@ -360,6 +360,14 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - Milestone 2 logic in `src/` is currently authoritative for local utility behavior and demo coverage.
 - A future decision is needed on consolidation: keep `src/` as milestone playground vs move reusable logic to `packages/shared`.
 
+### 14. Business warehouse performance reporting (partial)
+
+- `services/reporting/` is the separate business-facing reporting API. Its three protected manager/admin routes query weekly warehouse/client KPIs, return the latest run metadata, and request a manual run. The technical `/api/telemetry/report` path remains separate.
+- The reporting store uses the existing telemetry PostgreSQL connection but creates/writes only under `reporting.weekly_warehouse_client_performance` and `reporting.pipeline_runs`; event-source queries and report output use independent operations. Weekly output is unique by `(warehouse, client_id, week_start)` and updated through an upsert.
+- `uis/backoffice/app/reporting/` displays Inbound Volume, Outbound Throughput, Stockout Frequency, and Discrepancy Rate per warehouse/client, plus the covered week and latest run status. The route is linked from Operations Home and uses the existing authenticated API client.
+- This is a partial milestone: the organization content-exclusion policy denied writing under `data/pipelines/` and `data/process/`. The design document, Prefect flows/tasks, CLI, transformation tests, and pipeline runtime launcher are not present yet. The manual trigger endpoint returns 503 until the excluded runtime module is available.
+- Do not add Prefect to the shared API dependency set: Prefect 3 requires Pydantic 2, while the existing API remains pinned to FastAPI 0.99/Pydantic 1. Configure a separate pipeline interpreter for the eventual CLI/runtime instead.
+
 ## Validation and working practices
 
 - Website and backoffice have local validation commands: `npm run typecheck` and `npm run build`.
