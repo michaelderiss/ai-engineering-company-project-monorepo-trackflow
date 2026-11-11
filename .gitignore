@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.docker
+/.coverage
 node_modules/
 .next/
 out/

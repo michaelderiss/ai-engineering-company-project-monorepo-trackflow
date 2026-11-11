@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { apiFetch, isObject } from "../../lib/auth";
+import { trackTelemetry } from "../../lib/telemetry";
 
 const CATEGORY_OPTIONS = [
   "carrier_last_mile",
@@ -158,6 +159,7 @@ export default function SuppliersPage() {
     setSubmitting(true);
     setFormError(null);
     setFeedback("");
+    let actionSucceeded = false;
 
     try {
       const payload = {
@@ -176,11 +178,14 @@ export default function SuppliersPage() {
         method: "POST",
         body: JSON.stringify(payload),
       }, validSupplier);
+      actionSucceeded = true;
+      trackTelemetry("supplier_action_completed", { action: "created", result: "success" });
 
       setForm(EMPTY_FORM);
       setFeedback("Supplier registered successfully.");
       await loadSuppliers();
     } catch (err) {
+      if (!actionSucceeded) trackTelemetry("supplier_action_completed", { action: "created", result: "failure" });
       const message = err instanceof Error ? err.message : "Unexpected error.";
       setFormError(message);
     } finally {
@@ -200,11 +205,15 @@ export default function SuppliersPage() {
     setError(null);
     setFeedback("");
     setSavingId(supplierId);
+    let actionSucceeded = false;
     try {
       await apiFetch(`/suppliers/${supplierId}/rate`, { method: "PATCH", body: JSON.stringify({ rate_per_shipment: rate }) }, validSupplier);
+      actionSucceeded = true;
+      trackTelemetry("supplier_action_completed", { action: "rate_updated", result: "success" });
       setFeedback("Supplier rate updated.");
       await loadSuppliers();
     } catch (error) {
+      if (!actionSucceeded) trackTelemetry("supplier_action_completed", { action: "rate_updated", result: "failure" });
       setError(error instanceof Error ? error.message : "Could not save the rate. Please try again.");
     } finally {
       setSavingId(null);
@@ -217,11 +226,15 @@ export default function SuppliersPage() {
     setFeedback("");
     const nextStatus = supplier.status === "active" ? "suspended" : "active";
     setSavingId(supplier.id);
+    let actionSucceeded = false;
     try {
       await apiFetch(`/suppliers/${supplier.id}/status`, { method: "PATCH", body: JSON.stringify({ status: nextStatus }) }, validSupplier);
+      actionSucceeded = true;
+      trackTelemetry("supplier_action_completed", { action: "status_updated", result: "success" });
       setFeedback("Supplier status updated.");
       await loadSuppliers();
     } catch (error) {
+      if (!actionSucceeded) trackTelemetry("supplier_action_completed", { action: "status_updated", result: "failure" });
       setError(error instanceof Error ? error.message : "Could not update the status. Please try again.");
     } finally {
       setSavingId(null);

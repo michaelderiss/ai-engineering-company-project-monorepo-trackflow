@@ -162,7 +162,9 @@ def persist_events(events: list[TelemetryEvent]) -> int:
     if not events:
         return 0
 
-    from services.api.inventory_database import engine
+    from services.api.telemetry_database import get_telemetry_engine
+
+    engine = get_telemetry_engine()
 
     rows = _storage_rows(events)
     columns = (

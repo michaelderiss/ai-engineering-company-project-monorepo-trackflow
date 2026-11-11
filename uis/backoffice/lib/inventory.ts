@@ -113,18 +113,31 @@ async function inventoryRequest<T>(
   const headers = new Headers(options.headers);
   headers.set("Authorization", `Bearer ${token}`);
 
+  const method = (options.method ?? "GET").toUpperCase();
+  const route = path.startsWith("/products") ? "/inventory/products" : "/inventory/orders";
+  const response: { current: { statusCode: number; durationMs: number } | null } = { current: null };
   try {
     const { requestJson } = await import("../../../packages/shared/http");
-    return await requestJson<T>(`${getApiBase()}/inventory${path}`, {
+    const result = await requestJson<T>(`${getApiBase()}/inventory${path}`, {
       ...options,
       headers,
-    }, validate);
+    }, validate, (statusCode, durationMs) => { response.current = { statusCode, durationMs }; });
+    return result;
   } catch (error) {
     if (error instanceof RequestError && error.status === 401) {
       clearToken();
       redirectToLogin();
     }
     throw error;
+  } finally {
+    if (response.current !== null) {
+      trackTelemetry("api_latency_recorded", {
+        route,
+        method,
+        status_code: response.current.statusCode,
+        duration_ms: response.current.durationMs,
+      });
+    }
   }
 }
 
@@ -188,4 +201,4 @@ export function getInventoryOrders(): Promise<InventoryOrder[]> {
     {},
     (value) => Array.isArray(value) && value.every(isOrder),
   );
-}
+}

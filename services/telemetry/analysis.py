@@ -35,7 +35,9 @@ def _read_events(
     event_types: tuple[str, ...], start: datetime, end: datetime
 ) -> list[dict[str, Any]]:
     """Read only selected event kinds in the half-open UTC period [start, end)."""
-    from services.api.inventory_database import engine
+    from services.api.telemetry_database import get_telemetry_engine
+
+    engine = get_telemetry_engine()
 
     statement = text(
         "SELECT event_type, event_timestamp, properties "

@@ -24,7 +24,12 @@ function isSafeMessage(value: unknown): value is string {
   );
 }
 
-export async function requestResponse(url: string, options: RequestInit = {}): Promise<Response> {
+export async function requestResponse(
+  url: string,
+  options: RequestInit = {},
+  onResponse?: (status: number, durationMs: number) => void,
+): Promise<Response> {
+  const startedAt = performance.now();
   let response: Response;
   try {
     const headers = new Headers(options.headers);
@@ -32,6 +37,7 @@ export async function requestResponse(url: string, options: RequestInit = {}): P
       headers.set("Content-Type", "application/json");
     }
     response = await fetch(url, { ...options, headers, signal: options.signal ?? AbortSignal.timeout(15000), cache: "no-store" });
+    onResponse?.(response.status, Math.max(0, performance.now() - startedAt));
   } catch {
     throw new RequestError("Could not reach the service. Check your connection and try again.");
   }
@@ -58,8 +64,13 @@ export async function requestResponse(url: string, options: RequestInit = {}): P
   throw new RequestError(message, response.status, fields);
 }
 
-export async function requestJson<T>(url: string, options: RequestInit = {}, validate: (value: unknown) => boolean = (value) => isObject(value) || Array.isArray(value)): Promise<T> {
-  const response = await requestResponse(url, options);
+export async function requestJson<T>(
+  url: string,
+  options: RequestInit = {},
+  validate: (value: unknown) => boolean = (value) => isObject(value) || Array.isArray(value),
+  onResponse?: (status: number, durationMs: number) => void,
+): Promise<T> {
+  const response = await requestResponse(url, options, onResponse);
   if (response.status === 204) return null as T;
   let data: unknown;
   try { data = await response.json(); } catch {
