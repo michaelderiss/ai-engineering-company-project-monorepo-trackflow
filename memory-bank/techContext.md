@@ -1,5 +1,12 @@
 # Technical Context
 
+## Telemetry Contract
+
+- `docs/telemetry/event-schemas.json` defines the version 1.0.0 envelope and
+  strict allowlists for 17 events; `telemetry-plan.md` documents their triggers
+  and operational purpose. No client ID may be inferred from display names, and
+  mandatory events without real trigger sources remain un-emitted.
+
 ## Current repository baseline
 
 This repository now combines three active implementation layers:

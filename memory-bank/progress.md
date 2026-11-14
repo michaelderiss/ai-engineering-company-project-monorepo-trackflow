@@ -1,5 +1,12 @@
 # Progress
 
+## Telemetry Design
+
+- Added the telemetry plan and strict JSON event schema: 17 event types total,
+  including 5 mandatory inventory events from the TrackFlow briefing and 12
+  identified opportunities. The plan records categories, triggers, decisions,
+  privacy limits, and unresolved event sources.
+
 ## Completed
 
 ## INFRA-40 — Dockerization & Production Deploy
