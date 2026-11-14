@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { publicApiFetch, isObject, RequestError, setToken, redirectToHome } from "../../lib/auth";
+import { beginTelemetrySession, trackTelemetry } from "../../lib/telemetry";
 
 type FieldErrors = {
   email?: string;
@@ -79,6 +80,8 @@ export default function RegisterPage() {
         cache: "no-store",
       }, (value) => isObject(value) && typeof value.access_token === "string" && value.access_token.length > 0);
       setToken(loginData.access_token);
+      beginTelemetrySession();
+      trackTelemetry("login_succeeded", { auth_method: "password" });
       redirectToHome();
     } catch (err) {
       if (err instanceof RequestError) setFieldErrors(err.fields);
@@ -179,4 +182,4 @@ export default function RegisterPage() {
       </section>
     </main>
   );
-}
+}
