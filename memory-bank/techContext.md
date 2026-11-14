@@ -1,5 +1,16 @@
 # Technical Context
 
+## Telemetry Capture
+
+- The browser `TelemetryService` validates strict event/property allowlists,
+  creates opaque session identity, and batches best-effort events to
+  `/api/telemetry/events`. FastAPI validates the envelope and acknowledges the
+  batch without persistence or logging event content.
+- Current UI emitters are initial safe-route page view, successful/failed login,
+  and successful inventory product-list view. Mandatory inventory mutations
+  cannot emit client dimensions until a stable client-ID mapping and actual
+  trigger paths are implemented.
+
 ## Current repository baseline
 
 This repository now combines three active implementation layers:

@@ -34,6 +34,7 @@ from services.api.routes.suppliers import router as suppliers_router  # noqa: E4
 from services.api.routes.users import router as users_router  # noqa: E402
 from services.api.routes.incidents import router as incidents_router  # noqa: E402
 from services.api.routes.inventory import router as inventory_router  # noqa: E402
+from services.api.telemetry import router as telemetry_router  # noqa: E402
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
 
@@ -88,6 +89,7 @@ app.include_router(users_router)
 app.include_router(profiles_router)
 app.include_router(suppliers_router)
 app.include_router(inventory_router)
+app.include_router(telemetry_router)
 
 
 @app.get("/health")
