@@ -4,13 +4,17 @@
 
 - Added a strict validation-only telemetry batch endpoint returning HTTP 200
   with an accepted-event count; it does not persist event contents. The
-  backoffice captures safe page views, login success/failure, and successful
-  inventory product-list views.
-- The five mandatory inventory business events remain un-emitted until their
-  real trigger sources and an approved stable client-ID mapping are available.
+  endpoint is configurable from the browser build.
+- Backoffice capture includes safe page views, login success/failure, product
+  views, API latency, sanitized frontend errors, Web Vitals, and inbound/outbound
+  events after successful stock API writes. Client IDs use an approved explicit
+  mapping for seeded brands.
+- Threshold, direct-edit-rejection, and physical discrepancy events remain
+  unavailable until their real trigger sources exist.
 - Verified the browser batch against the stub in Chrome DevTools Network: the
   telemetry POST received HTTP 200. Web Vitals and a visual dashboard are not
-  included in this capture part.
+  stored or displayed by the stub; the additional visual dashboard is not part
+  of this capture part.
 
 ## Completed
 

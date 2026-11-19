@@ -62,7 +62,9 @@ Use the printed backoffice URL, sign in, and select Incident Manager. The API de
 
 Telemetry capture is controlled in the browser build by
 `NEXT_PUBLIC_TELEMETRY_ENABLED` (unset/anything except `false` enables it) and
-on the API by `TELEMETRY_ENABLED` (default `true`). The browser queue is
+on the API by `TELEMETRY_ENABLED` (default `true`). The receiver path is
+configurable with `NEXT_PUBLIC_TELEMETRY_ENDPOINT` and defaults to
+`/api/telemetry/events`. The browser queue is
 best-effort, in-memory, capped at 20 events, and drops failed sends after three
 attempts. The current API route only validates and acknowledges events; Part 3
 storage has not been enabled. `userId` is an opaque UUID generated per signed-in
@@ -72,10 +74,12 @@ cross-session analytics. The initial capture events are:
 - `navigation_page_viewed` from `TelemetryBootstrap` on the initial safe route.
 - `login_succeeded` and `login_failed` from the login and registration flows.
 - `inventory_products_viewed` after the product list loads successfully.
+- `inbound_order_created` and `outbound_order_created` after successful stock API writes.
+- `api_latency_recorded`, `frontend_error_captured`, and `web_vital_recorded` from the telemetry bootstrap.
 
-The five mandatory inventory business events are not emitted until their real
-trigger workflows and an approved stable client ID mapping exist. Web Vitals,
-frontend errors, and a separate session-expiration event are not implemented.
+The remaining mandatory stock-threshold, direct-edit-rejection, and physical
+discrepancy events are not emitted until their real trigger workflows exist. A
+separate session-expiration event is not implemented.
 
 1. Before creating records, check Summary against the API README's expected 95-record totals. Re-running the seed must not change them. Later browser-created incidents increase these totals.
 2. Submit the empty registration form. Required-field errors must appear beside the fields without sending a request. Capture the PR validation screenshot here.

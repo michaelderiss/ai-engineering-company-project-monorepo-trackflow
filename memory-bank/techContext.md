@@ -7,9 +7,11 @@
   `/api/telemetry/events`. FastAPI validates the envelope and acknowledges the
   batch without persistence or logging event content.
 - Current UI emitters are initial safe-route page view, successful/failed login,
-  and successful inventory product-list view. Mandatory inventory mutations
-  cannot emit client dimensions until a stable client-ID mapping and actual
-  trigger paths are implemented.
+  successful inventory product-list view, API latency, sanitized frontend
+  errors, Web Vitals, and inbound/outbound events after successful API writes.
+  The inventory client uses an explicit client-name-to-stable-ID map for seeded
+  brands; threshold, direct-write rejection, and physical-count events still
+  need their real workflows.
 
 ## Current repository baseline
 

@@ -6,6 +6,7 @@ import {
   getInventoryOrders,
   getInventoryProducts,
 } from "../lib/inventory";
+import * as telemetry from "../lib/telemetry";
 
 function installStorage(token: string): void {
   const store = new Map([["trackflow_access_token", token]]);
@@ -68,6 +69,16 @@ describe("inventory API client", () => {
   });
 
   it("posts inbound movements through the client integration layer", async () => {
+    const telemetrySpy = jest.spyOn(telemetry, "trackInventoryOrderCreated");
+    const product = {
+      id: 1,
+      name: "White Sneaker",
+      sku: "CLT-SNK-W-42",
+      client_name: "PureStep Footwear",
+      category: "fashion" as const,
+      warehouse: "LA" as const,
+      current_stock: 25,
+    };
     const entry = {
       id: 7,
       sku_id: 1,
@@ -85,12 +96,13 @@ describe("inventory API client", () => {
       quantity: 3,
       reference: "PO-TEST-1001",
       warehouse: "LA",
-    })).resolves.toEqual(entry);
+    }, product)).resolves.toEqual(entry);
 
     expect(fetchStub).toHaveBeenCalledWith(
       "http://inventory.test/inventory/orders/inbound",
       expect.objectContaining({ method: "POST" }),
     );
+    expect(telemetrySpy).toHaveBeenCalledWith("inbound_order_created", product, 3);
   });
 
   it("creates a product and fetches its detail through the client", async () => {
@@ -125,6 +137,16 @@ describe("inventory API client", () => {
   });
 
   it("records outbound movements and validates history with SKU details", async () => {
+    const telemetrySpy = jest.spyOn(telemetry, "trackInventoryOrderCreated");
+    const product = {
+      id: 1,
+      name: "White Sneaker",
+      sku: "CLT-SNK-W-42",
+      client_name: "PureStep Footwear",
+      category: "fashion" as const,
+      warehouse: "LA" as const,
+      current_stock: 25,
+    };
     const stockExit = {
       id: 8,
       sku_id: 1,
@@ -169,13 +191,14 @@ describe("inventory API client", () => {
       exit_type: "dispatch",
       tracking_number: "TRACK-TEST-1001",
       warehouse: "LA",
-    })).resolves.toEqual(stockExit);
+    }, product)).resolves.toEqual(stockExit);
     await expect(getInventoryOrders()).resolves.toEqual([order]);
 
     expect(fetchStub.mock.calls.map(([url]) => url)).toEqual([
       "http://inventory.test/inventory/orders/outbound",
       "http://inventory.test/inventory/orders",
     ]);
+    expect(telemetrySpy).toHaveBeenCalledWith("outbound_order_created", product, 1);
   });
 
   it("rejects malformed product payloads", async () => {

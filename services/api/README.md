@@ -18,7 +18,7 @@ The forgot-password endpoint always returns the same confirmation for known and 
 
 `POST /api/telemetry/events` is a validation-only stub. It accepts a JSON batch of up to 20 schema-valid events (64 KiB maximum), returns HTTP 200 with `{"accepted": <count>}`, and neither persists nor logs event contents. Set `TELEMETRY_ENABLED=false` to disable the route.
 
-The backoffice captures safe page views, successful/failed login attempts, and successful inventory product-list views. The browser queue is best-effort and sends batches to this endpoint. The five mandatory inventory business events are defined by the schema but are not emitted until the application has the real trigger workflows and an approved stable client ID mapping.
+The backoffice endpoint is configurable with `NEXT_PUBLIC_TELEMETRY_ENDPOINT` and defaults to `/api/telemetry/events`. Capture includes safe page views, login success/failure, product-list views, API latency, sanitized frontend errors, and Web Vitals. Inbound receipts and customer dispatches emit their mandatory events only after a successful API response; the four seeded clients use the explicit stable mapping in the backoffice telemetry service. Threshold, direct-edit-rejection, and physical-discrepancy events remain unavailable until their workflows exist.
 
 ## Inventory Management (Milestone 5)
 

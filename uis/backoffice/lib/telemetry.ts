@@ -2,7 +2,7 @@
 
 export const TELEMETRY_SESSION_KEY = "trackflow_telemetry_session";
 export const TELEMETRY_USER_KEY = "trackflow_telemetry_user";
-export const TELEMETRY_ENDPOINT = "/api/telemetry/events";
+export const DEFAULT_TELEMETRY_ENDPOINT = "/api/telemetry/events";
 const SCHEMA_VERSION = "1.0.0";
 const MAX_EVENTS = 20;
 const FLUSH_INTERVAL_MS = 10_000;
@@ -50,15 +50,35 @@ const rules: Record<TelemetryEventType, PropertyRule> = {
 };
 const routes = ["/", "/inventory/products", "/inventory/orders", "/inventory/orders/inbound", "/inventory/orders/outbound", "/suppliers", "/incidents", "/incident-file-analyzer", "/account/profile"];
 const apiRoutes = ["/auth/login", "/auth/me", "/users", "/profiles/me", "/inventory/products", "/inventory/orders", "/suppliers", "/api/incidents"];
+const clientIdsByName: Record<string, string> = {
+  "PureStep Footwear": "purestep_footwear",
+  "SoundWave Electronics": "soundwave_electronics",
+  "GlowLab Cosmetics": "glowlab_cosmetics",
+  UrbanThread: "urbanthread",
+};
 let queue: TelemetryEvent[] = [];
 let timer: number | undefined;
+
+export function getTelemetryEndpoint(): string {
+  return process.env.NEXT_PUBLIC_TELEMETRY_ENDPOINT?.trim() || DEFAULT_TELEMETRY_ENDPOINT;
+}
+
+export function telemetryEnabled(): boolean {
+  const value = process.env.NEXT_PUBLIC_TELEMETRY_ENABLED?.trim().toLowerCase();
+  return !["0", "false", "no", "off"].includes(value ?? "") && typeof window !== "undefined";
+}
+
+export function canonicalApiRoute(pathname: string): string | null {
+  return [...apiRoutes].sort((a, b) => b.length - a.length).find(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  ) ?? null;
+}
 
 function uuid(): string | null {
   try { return globalThis.crypto.randomUUID(); } catch { return null; }
 }
 function enabled(): boolean {
-  const value = process.env.NEXT_PUBLIC_TELEMETRY_ENABLED?.trim().toLowerCase();
-  return !["0", "false", "no", "off"].includes(value ?? "") && typeof window !== "undefined";
+  return telemetryEnabled();
 }
 function safeRoute(api = false): string | null {
   const route = window.location.pathname;
@@ -97,7 +117,7 @@ function makeEvent(type: TelemetryEventType, properties: Record<string, unknown>
 
 async function deliver(events: TelemetryEvent[], attempt = 0): Promise<void> {
   try {
-    const response = await fetch(TELEMETRY_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events }), keepalive: true, credentials: "same-origin" });
+    const response = await fetch(getTelemetryEndpoint(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events }), keepalive: true, credentials: "same-origin" });
     if (!response.ok) throw new Error("delivery failed");
   } catch {
     if (attempt + 1 < MAX_ATTEMPTS) {
@@ -115,12 +135,18 @@ export function startTelemetry(): void {
   timer = window.setInterval(flush, FLUSH_INTERVAL_MS);
   document.addEventListener("visibilitychange", onVisibilityChange);
 }
+
+export function stopTelemetry(): void {
+  if (timer !== undefined) window.clearInterval(timer);
+  timer = undefined;
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+}
 function onVisibilityChange(): void {
   if (document.visibilityState !== "hidden" || !queue.length || !enabled()) return;
   const batch = queue.splice(0, MAX_EVENTS);
   try {
     const blob = new Blob([JSON.stringify({ events: batch })], { type: "application/json" });
-    if (!navigator.sendBeacon(TELEMETRY_ENDPOINT, blob)) void deliver(batch);
+    if (!navigator.sendBeacon(getTelemetryEndpoint(), blob)) void deliver(batch);
   } catch { void deliver(batch); }
 }
 export function trackTelemetry(type: TelemetryEventType, properties: Record<string, unknown> = {}): void {
@@ -129,6 +155,60 @@ export function trackTelemetry(type: TelemetryEventType, properties: Record<stri
   if (!event) return;
   queue.push(event);
   if (queue.length >= MAX_EVENTS) flush();
+}
+
+export function trackApiLatency(
+  route: string,
+  method: string,
+  statusCode: number,
+  durationMs: number,
+): void {
+  if (!canonicalApiRoute(route) || !["GET", "POST", "PATCH", "DELETE"].includes(method)) return;
+  if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) return;
+  if (!Number.isFinite(durationMs) || durationMs < 0) return;
+  trackTelemetry("api_latency_recorded", { route: canonicalApiRoute(route), method, status_code: statusCode, duration_ms: durationMs });
+}
+
+export function trackFrontendError(
+  errorKind: "window_error" | "unhandled_rejection",
+): void {
+  const route = safeRoute();
+  if (!route) return;
+  trackTelemetry("frontend_error_captured", {
+    error_kind: errorKind,
+    error_code: errorKind === "window_error" ? "WINDOW_ERROR" : "UNHANDLED_REJECTION",
+    route,
+  });
+}
+
+export function trackWebVital(
+  metricName: "CLS" | "FCP" | "INP" | "LCP" | "TTFB",
+  value: number,
+): void {
+  const route = safeRoute();
+  if (!route || !Number.isFinite(value) || value < 0) return;
+  trackTelemetry("web_vital_recorded", { metric_name: metricName, value, route });
+}
+
+export function trackInventoryOrderCreated(
+  type: "inbound_order_created" | "outbound_order_created",
+  product: {
+    client_name: string;
+    sku: string;
+    category: "fashion" | "electronics" | "cosmetics";
+    warehouse: "LA" | "ZGZ";
+  },
+  quantity: number,
+): void {
+  const clientId = clientIdsByName[product.client_name];
+  if (!clientId || !Number.isInteger(quantity) || quantity <= 0) return;
+  trackTelemetry(type, {
+    warehouse: product.warehouse === "LA" ? "los_angeles" : "zaragoza",
+    client_id: clientId,
+    product_id: product.sku,
+    product_category: product.category,
+    quantity,
+  });
 }
 export function trackLoginFailure(reason: "invalid_credentials" | "network_error" | "rate_limited"): void {
   if (!enabled()) return;
