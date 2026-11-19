@@ -1,80 +1,11 @@
 # Technical Context
 
-## API serialization contracts
+## Telemetry Contract
 
-- Public success responses use API-owned response models in
-  `services/api/response_schemas.py`, distinct from internal user/storage models
-  and write request schemas. Keep `User.hashed_password` internal to auth and
-  storage; never attach it to a FastAPI response model.
-- Signup request permits email, password and optional profile only; role and
-  active state are server defaults. `/auth/me` is the authenticated self-service
-  projection that includes the caller's email. User directory/detail/PATCH
-  projections omit email, hashes, and nested profile data. Only admins may update
-  a user's role or active state.
-- Inventory movement response schemas omit internal `user_uuid`; persistence
-  still records actor identity. History sends the SKU details required by the UI
-  and no redundant creator ID. Preserve catalog-cache and incident-summary-cache
-  behavior when changing serialization.
-- The analyzer JSON has a typed schema. CSV export is a streamed `text/csv`
-  response documented through its OpenAPI media type/content schema, not a JSON
-  Pydantic response model. Framework-generated OpenAPI/docs routes are metadata,
-  not business endpoint response contracts. See `docs/serialization-audit.md`.
-
-## Telemetry contract and sequencing
-
-- Company telemetry source: `trackflow-BRIEFINGTelemetry.md`; its exact mandatory
-  event types are `inbound_order_created`, `outbound_order_created`,
-  `stock_threshold_triggered`, `direct_stock_edit_rejected`, and
-  `inventory_discrepancy_detected`. Its required dimensions include warehouse,
-  client, SKU/product, category, and quantity; no recipient/carrier data belongs
-  in these events.
-- Part 1 contract is `docs/telemetry/event-schemas.json`, documented in
-  `docs/telemetry/telemetry-plan.md`. Note current source mismatch: inventory DB
-  uses `LA`/`ZGZ`, display `client_name`, and integer SKU primary keys, while
-  telemetry calls for `los_angeles`/`zaragoza`, stable `client_id`, and product
-  SKU code. Add explicit mapping and a stable client-ID source before capture;
-  never substitute display name or invent an ID.
-- Envelope identity design: nullable opaque session UUID and an independent
-  random UUID `userId` scoped to that authenticated session. Generate/rotate both
-  at login and clear them at logout/session expiry; never derive `userId` from
-  the account ID. This enables within-session grouping only, not cross-session
-  analytics. Never record email, passwords, tokens, raw request bodies or IPs.
-  Event properties are strict per-event allowlists. Batch queue/drop behavior is
-  non-blocking; order events occur only after commits.
-- Three briefing metrics require future trigger sources: threshold crossing,
-  actual direct-write rejection (the current API has no direct-write route), and
-  physical-count discrepancy. Do not infer or fabricate them from unrelated
-  events.
-- Execute telemetry milestones in order: approved plan/schema → FastAPI stub +
-  browser batch service/instrumentation → pause for user Supabase setup before
-  storage persistence → report pipeline/dashboard using real event data.
-
-## Caching and Profiling
-
-- `services/api/cache.py` owns bounded, monotonic TTL caches storing immutable
-  serialized JSON; misses are lock-serialized, errors/oversized values uncached.
-  Catalog: 15s, engine-identity key, 4 entries/1MiB each. Incident summary: 30s,
-  `(DB_PATH, authenticated user ID)` key, 128 entries/16KiB each. Authentication
-  remains active on cache hits; HTTP `Cache-Control: no-store` prevents proxy reuse.
-- Inventory route commits clear catalog; incident store commits clear all user
-  summaries, including same-process seeding. TTL bounds external-process/worker
-  staleness, not distributed read-your-writes. Use Redis/coordinated invalidation
-  before promising that guarantee across workers. Stock detail/dispatch remain
-  authoritative database reads; no cached availability authorizes an outbound.
-- `main.py` logs matched route templates, method, status and duration via
-  `api.timing`; no query values, path identifiers, tokens or payloads are logged.
-- Conditional `next/dynamic` components: `IncidentAnalysisReport` after analysis,
-  `InventoryHistoryTable` after nonempty history fetch. History memoizes row/date
-  preparation by `[orders]` and renders 50 rows/page. This is not server pagination;
-  first data transfer/preparation remains O(n). Memo lifetime is component-local.
-- `scripts/profile_caching.py` creates temporary varied SQLite datasets only,
-  supports `--uncached`, outputs registered routes/row counts/timings and deletes
-  storage. `scripts/check_caching_ui.cjs` uses separately installed Playwright and
-  synthetic API interception to test chunk gating, memo reuse and mobile layouts.
-  `CACHING_REPORT.md` documents evidence, estimates, tradeoffs and known limits.
-- Environment correction: `uv` is not present in the current container despite
-  earlier notes; use an available isolated environment with API/test requirements.
-  Caching validation used `/tmp/trackflow-caching-venv/bin/python`.
+- `docs/telemetry/event-schemas.json` defines the version 1.0.0 envelope and
+  strict allowlists for 17 events; `telemetry-plan.md` documents their triggers
+  and operational purpose. No client ID may be inferred from display names, and
+  mandatory events without real trigger sources remain un-emitted.
 
 ## Current repository baseline
 

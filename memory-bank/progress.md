@@ -1,91 +1,11 @@
 # Progress
 
-## API Serialization Audit
+## Telemetry Design
 
-- Introduced endpoint-specific response projections across the FastAPI business
-  routes. Public user responses never contain password hashes; signup does not
-  echo email and cannot select a role or active status. `/auth/me` deliberately
-  returns only the authenticated user's email. Role/active changes through user
-  PATCH are admin-only.
-- Added typed responses for message/delete, health, incident options/summary,
-  analyzer output, supplier/profile/user, and inventory contracts. Streaming CSV
-  is described as `text/csv` in OpenAPI rather than being misrepresented as JSON.
-- Inventory movement storage retains actor IDs, but API outputs and history UI
-  omit raw `user_uuid`; list/history projections carry only fields used by the
-  operational UI. Existing inventory catalog and user-scoped incident summary
-  caching semantics are preserved.
-- Added endpoint-by-endpoint baseline/target documentation in
-  `docs/serialization-audit.md`. Regression tests and OpenAPI checks are part of
-  this milestone; update verification details after completing validation.
-
-## Caching Optimisation Milestone
-
-- Added privacy-safe per-request route/status timing and bounded in-process JSON
-  caches: public inventory catalog 15s; authenticated, user-scoped incident summary
-  30s. Successful product/movement and incident create/status writes invalidate
-  their respective caches. Outbound stock checks and SKU detail remain uncached.
-- Added disposable-data profiling in `scripts/profile_caching.py` (`--uncached`
-  for baseline): 2,006 SKUs, 40,007 movements and 20,000 incidents. Local seeded
-  medians: catalog 107.14ms uncached vs 2.01ms cached; summary 28.27ms vs 1.88ms.
-  These are synthetic SQLite measurements, not production telemetry.
-- Lazily load analyzer results after successful analysis and movement table after
-  history data. Memoize measured history formatting by `[orders]`; paginate at 50
-  rows. Desktop/mobile browser checks confirm no recomputation on page changes
-  and recomputation on refresh; `scripts/check_caching_ui.cjs` reproduces checks.
-- Validation: 172 backend tests, 32 frontend tests, backoffice typecheck/build
-  passed. See `CACHING_REPORT.md` for complete endpoint assessment, TTL tradeoffs,
-  reproduction, evidence and limits. Current branch remains `feature/caching`.
-- Invalidation is process-local; other workers/external writers may be stale until
-  TTL expiry. Use one worker for immediate read-your-writes or coordinate via Redis.
-  Legacy analyzer `_LAST_ANALYSIS` cross-user ownership remains a separate risk.
-- Current container lacks `uv`; backend verification used a disposable venv at
-  `/tmp/trackflow-caching-venv`, not the project environment. Production data and
-  existing website changes were not touched. Final implementation and publication
-  were approved by the user; submit `feature/caching` against `main`.
-
-## Telemetry Projects
-
-- The user is progressing through TrackFlow Telemetry Parts 1–4 on branch
-  `Telemetry`. The supplied company-specific source is
-  `trackflow-BRIEFINGTelemetry.md`; it defines five mandatory inventory events
-  and canonical dimensions (`warehouse`, `client_id`, `product_id`,
-  `product_category`, `quantity`).
-- Part 1 design deliverables are in `docs/telemetry/telemetry-plan.md` and
-  `docs/telemetry/event-schemas.json`: 17 event types (5 mandatory, 12 proposed)
-  across inventory, auth, navigation, workflow, API performance, frontend errors,
-  Web Vitals, supplier, and incident categories. The plan identifies three
-  mandatory event triggers not yet implemented in the app (stock threshold,
-  direct stock write rejection, physical discrepancy) and a missing stable
-  client ID mapping; do not fabricate those events/dimensions.
-- Part 2 capture uses a strict browser event allowlist, tab-scoped random UUID
-  identities, bounded best-effort batches, and safe login/catalog-load
-  instrumentation. It does not yet implement all proposed client-side
-  opportunities (notably errors, Web Vitals, API latency, or successful order
-  commits), and the three unavailable mandatory domain triggers remain
-  intentionally un-emitted.
-- Part 3 now validates each event independently and persists valid events via a
-  single parameterized bulk insert with duplicate-ID idempotency. Supabase table
-  setup and indexes were confirmed by the user; this workspace's own DB
-  connection attempt failed, so no live read/write was verified.
-- Part 4 adds Pandas-backed daily event volume, API error rate, and route latency
-  metrics plus an authenticated manager/admin `GET /api/telemetry/report` API.
-  It uses an inclusive-start/exclusive-end UTC period, defaults to the prior
-  seven days, filters event kinds/time in SQL, and caches serialized responses
-  for 60 seconds. Until the live database is reachable and actual events exist,
-  the report may return empty arrays.
-- Validation: **190 backend tests passed**, including 17 focused telemetry
-  API/report tests; **36 frontend tests passed** and the backoffice TypeScript
-  typecheck passed. Python 3.14/FastAPI-Starlette/httpx deprecation warnings
-  remain. These tests mock persistence/report reads; no live Supabase data or
-  end-to-end persistence claim is made.
-- Remaining implementation prerequisite: stable client ID mapping, real
-  threshold-crossing source, actual direct-stock-write rejection boundary, and
-  physical count/audit workflow are needed before the mandatory inventory
-  events can be fully emitted end-to-end. Public deployment also needs database
-  grants and ingestion rate limits reviewed.
-- Approved identity choice: `userId` is an independent opaque random UUID scoped
-  to an authenticated session, rotated with `sessionId` on login and cleared on
-  logout/session expiry. No raw account ID or cross-session joins.
+- Added the telemetry plan and strict JSON event schema: 17 event types total,
+  including 5 mandatory inventory events from the TrackFlow briefing and 12
+  identified opportunities. The plan records categories, triggers, decisions,
+  privacy limits, and unresolved event sources.
 
 ## Completed
 

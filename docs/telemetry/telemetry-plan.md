@@ -1,7 +1,7 @@
 # TrackFlow Telemetry Plan
 
-**Status:** Design baseline for telemetry capture, storage, and operational reporting  
-**Schema version:** `1.0.0`  
+**Status:** Design baseline for telemetry capture, storage, and operational reporting
+**Schema version:** `1.0.0`
 **Scope:** TrackFlow operations backoffice and its FastAPI API. The mandatory metric names and inventory dimensions below are taken from `trackflow-BRIEFINGTelemetry.md`.
 
 > This is a design document. In particular, several mandatory inventory events describe audit/threshold capabilities that the current app does not yet expose. They remain in the contract, but must only be emitted when the corresponding real workflow or rejection occurs; do not fabricate events from unrelated actions.
