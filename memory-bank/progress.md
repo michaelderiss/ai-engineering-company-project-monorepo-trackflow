@@ -1,20 +1,22 @@
 # Progress
 
-## Telemetry Capture
+## Telemetry Event Storage
 
-- Added a strict validation-only telemetry batch endpoint returning HTTP 200
-  with an accepted-event count; it does not persist event contents. The
-  endpoint is configurable from the browser build.
-- Backoffice capture includes safe page views, login success/failure, product
-  views, API latency, sanitized frontend errors, Web Vitals, and inbound/outbound
-  events after successful stock API writes. Client IDs use an approved explicit
-  mapping for seeded brands.
-- Threshold, direct-edit-rejection, and physical discrepancy events remain
-  unavailable until their real trigger sources exist.
-- Verified the browser batch against the stub in Chrome DevTools Network: the
-  telemetry POST received HTTP 200. Web Vitals and a visual dashboard are not
-  stored or displayed by the stub; the additional visual dashboard is not part
-  of this capture part.
+- Added an idempotent Supabase schema at `services/telemetry/schema.sql` and a
+  dedicated `TELEMETRY_DATABASE_URL` connection; inventory remains on
+  `DATABASE_URL`.
+- `POST /api/telemetry/events` validates and stores mixed batches with per-event
+  rejection counts. FastAPI now emits route/status/duration events and supplier
+  action outcomes only from the service layer after success or a real 404.
+- The live Supabase table/schema was verified. Frontend source is not changed in
+  the storage submission branch. A live failure outcome can be generated with a
+  non-existent supplier ID without mutating supplier records.
+- Added manager/admin-only `GET /telemetry/report` with a compatibility alias at
+  `/api/telemetry/report`; the JSON includes daily event volume, API error rate,
+  and mean/p95 latency by route. SQL bounds the UTC window; Pandas performs the
+  refine/group/aggregate steps and a bounded 60-second cache reuses results per
+  normalized query window. No additional auth metric or visual dashboard is
+  included.
 
 ## Completed
 

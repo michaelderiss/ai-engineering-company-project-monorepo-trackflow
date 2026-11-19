@@ -1,4 +1,4 @@
-"""Pandas-based technical telemetry metrics backed by bounded SQL queries."""
+"""Bounded telemetry queries and operational report metrics."""
 
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ ALL_EVENT_TYPES = (
 def _read_events(
     event_types: tuple[str, ...], start: datetime, end: datetime
 ) -> list[dict[str, Any]]:
-    """Read only selected event kinds in the half-open UTC period [start, end)."""
-    from services.api.inventory_database import engine
+    """Select only allowed event types within the half-open UTC period."""
+    from services.api.telemetry_database import get_telemetry_engine
 
     statement = text(
         "SELECT event_type, event_timestamp, properties "
@@ -43,7 +43,7 @@ def _read_events(
         "WHERE event_timestamp >= :start AND event_timestamp < :end "
         "AND event_type IN :event_types"
     ).bindparams(bindparam("event_types", expanding=True))
-    with engine.connect() as connection:
+    with get_telemetry_engine().connect() as connection:
         rows = connection.execute(
             statement,
             {"start": start, "end": end, "event_types": event_types},
@@ -51,14 +51,23 @@ def _read_events(
     return [dict(row) for row in rows]
 
 
+def _properties_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
 def _frame(event_types: tuple[str, ...], start: datetime, end: datetime) -> pd.DataFrame:
-    rows = _read_events(event_types, start, end)
-    frame = pd.DataFrame.from_records(rows)
+    frame = pd.DataFrame.from_records(_read_events(event_types, start, end))
     if frame.empty:
         return pd.DataFrame(columns=["event_type", "event_timestamp", "properties", "day"])
 
-    # Normalize before any temporal grouping; database timestamps may arrive in
-    # different offsets even though the stored contract is UTC-aware.
     frame["event_timestamp"] = pd.to_datetime(frame["event_timestamp"], utc=True, errors="coerce")
     frame = frame.dropna(subset=["event_timestamp"]).copy()
     frame["day"] = frame["event_timestamp"].dt.strftime("%Y-%m-%d")
@@ -66,29 +75,20 @@ def _frame(event_types: tuple[str, ...], start: datetime, end: datetime) -> pd.D
     return frame
 
 
-def _properties_dict(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-        return decoded if isinstance(decoded, dict) else {}
-    return {}
-
-
 def events_per_day(start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Count received events by UTC calendar day (technical pipeline volume)."""
+    """Count event volume per UTC day to reveal activity or ingestion gaps."""
     frame = _frame(ALL_EVENT_TYPES, start, end)
     if frame.empty:
         return []
-    grouped = frame.groupby("day", as_index=False).size().rename(columns={"size": "event_count"})
-    return grouped.to_dict(orient="records")
+    grouped = frame.groupby("day").size().reset_index(name="event_count")
+    return [
+        {"day": str(row.day), "event_count": int(row.event_count)}
+        for row in grouped.itertuples(index=False)
+    ]
 
 
 def api_error_rate_by_day(start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Return daily API failure ratio from instrumented API request events."""
+    """Measure daily API failure ratio to flag reliability regressions."""
     frame = _frame(("api_latency_recorded",), start, end)
     if frame.empty:
         return []
@@ -100,16 +100,25 @@ def api_error_rate_by_day(start: datetime, end: datetime) -> list[dict[str, Any]
         return []
     frame["is_error"] = frame["status_code"] >= 400
     grouped = frame.groupby("day").agg(
-        request_count=("is_error", "size"), error_count=("is_error", "sum")
+        request_count=("is_error", "size"),
+        error_count=("is_error", "sum"),
     ).reset_index()
     grouped["error_rate"] = (grouped["error_count"] / grouped["request_count"]).round(6)
-    for column in ("request_count", "error_count"):
-        grouped[column] = grouped[column].astype(int)
-    return grouped.to_dict(orient="records")
+    return [
+        {
+            "day": str(row.day),
+            "request_count": int(row.request_count),
+            "error_count": int(row.error_count),
+            "error_rate": float(row.error_rate),
+        }
+        for row in grouped.itertuples(index=False)
+    ]
 
 
 def api_latency_by_day_route(start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Summarize API latency by UTC day and safe route template."""
+    """Report mean and p95 latency by safe route to identify slow endpoints."""
+    from services.api.telemetry import API_ROUTES
+
     frame = _frame(("api_latency_recorded",), start, end)
     if frame.empty:
         return []
@@ -117,20 +126,31 @@ def api_latency_by_day_route(start: datetime, end: datetime) -> list[dict[str, A
     frame["duration_ms"] = frame["properties"].map(
         lambda properties: pd.to_numeric(properties.get("duration_ms"), errors="coerce")
     )
-    frame = frame.dropna(subset=["route", "duration_ms"])
+    frame = frame[
+        frame["route"].isin(API_ROUTES)
+        & frame["duration_ms"].notna()
+        & (frame["duration_ms"] >= 0)
+    ]
     if frame.empty:
         return []
     grouped = frame.groupby(["day", "route"])["duration_ms"].agg(
-        request_count="size", mean_duration_ms="mean", p95_duration_ms=lambda values: values.quantile(0.95)
+        request_count="size",
+        mean_duration_ms="mean",
+        p95_duration_ms=lambda values: values.quantile(0.95),
     ).reset_index()
-    grouped["request_count"] = grouped["request_count"].astype(int)
-    for column in ("mean_duration_ms", "p95_duration_ms"):
-        grouped[column] = grouped[column].round(3)
-    return grouped.to_dict(orient="records")
+    return [
+        {
+            "day": str(row.day),
+            "route": row.route,
+            "request_count": int(row.request_count),
+            "mean_duration_ms": round(float(row.mean_duration_ms), 3),
+            "p95_duration_ms": round(float(row.p95_duration_ms), 3),
+        }
+        for row in grouped.itertuples(index=False)
+    ]
 
 
 def build_technical_report(start: datetime, end: datetime) -> dict[str, list[dict[str, Any]]]:
-    """Build report metrics for one already-resolved reporting period."""
     return {
         "events_per_day": events_per_day(start, end),
         "api_error_rate_by_day": api_error_rate_by_day(start, end),

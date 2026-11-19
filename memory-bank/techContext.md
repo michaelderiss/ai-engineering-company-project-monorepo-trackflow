@@ -1,17 +1,23 @@
 # Technical Context
 
-## Telemetry Capture
+## Telemetry Event Storage
 
-- The browser `TelemetryService` validates strict event/property allowlists,
-  creates opaque session identity, and batches best-effort events to
-  `/api/telemetry/events`. FastAPI validates the envelope and acknowledges the
-  batch without persistence or logging event content.
-- Current UI emitters are initial safe-route page view, successful/failed login,
-  successful inventory product-list view, API latency, sanitized frontend
-  errors, Web Vitals, and inbound/outbound events after successful API writes.
-  The inventory client uses an explicit client-name-to-stable-ID map for seeded
-  brands; threshold, direct-write rejection, and physical-count events still
-  need their real workflows.
+- Telemetry persistence uses the dedicated PostgreSQL engine in
+  `services/api/telemetry_database.py`; it requires TLS and
+  `TELEMETRY_DATABASE_URL`, leaving inventory's `DATABASE_URL` isolated.
+- `services/telemetry/schema.sql` is the idempotent Supabase setup; the API
+  ingestion route is `/api/telemetry/events`. Server emitters share the same
+  strict schema/allowlist and use null session/user IDs rather than account data.
+- Technical request timing is emitted from FastAPI middleware; supplier outcome
+  events are emitted by the supplier service routes after a persisted mutation
+  or a real not-found failure. No frontend instrumentation is required for these
+  server-side event types.
+- `GET /telemetry/report` and `/api/telemetry/report` require manager/admin
+  authentication and query the telemetry engine over a UTC half-open date range.
+  `services/telemetry/analysis.py` loads bounded rows into Pandas, refines types
+  and timestamps, then groups daily event volume, API error ratio, and mean/p95
+  latency by canonical route. A bounded cache keys normalized windows for 60s;
+  no dashboard or separate auth metric is included.
 
 ## Current repository baseline
 
