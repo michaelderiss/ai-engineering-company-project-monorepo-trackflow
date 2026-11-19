@@ -5,7 +5,7 @@ import {
   getToken,
   redirectToLogin,
 } from "./auth";
-import { trackTelemetry } from "./telemetry";
+import { trackInventoryOrderCreated, trackTelemetry } from "./telemetry";
 
 export type Warehouse = "LA" | "ZGZ";
 export type InventoryCategory = "fashion" | "electronics" | "cosmetics";
@@ -28,6 +28,7 @@ export type StockEntry = {
   reference: string;
   warehouse: Warehouse;
   created_at: string;
+  user_uuid: string;
 };
 
 export type StockExit = {
@@ -38,6 +39,7 @@ export type StockExit = {
   tracking_number: string | null;
   warehouse: Warehouse;
   created_at: string;
+  user_uuid: string;
 };
 
 export type InventoryOrder = {
@@ -50,6 +52,7 @@ export type InventoryOrder = {
   tracking_number: string | null;
   warehouse: Warehouse;
   created_at: string;
+  user_uuid: string;
   sku: Omit<InventoryProduct, "current_stock">;
 };
 
@@ -89,6 +92,7 @@ function isOrder(value: unknown): value is InventoryOrder {
     typeof value.quantity === "number" &&
     isWarehouse(value.warehouse) &&
     typeof value.created_at === "string" &&
+    typeof value.user_uuid === "string" &&
     isObject(value.sku) &&
     typeof value.sku.id === "number" &&
     typeof value.sku.name === "string" &&
@@ -151,8 +155,8 @@ export function createInventoryProduct(payload: CreateProduct): Promise<Inventor
   );
 }
 
-export function createStockEntry(payload: CreateStockEntry): Promise<StockEntry> {
-  return inventoryRequest(
+export function createStockEntry(payload: CreateStockEntry, product?: InventoryProduct): Promise<StockEntry> {
+  return inventoryRequest<StockEntry>(
     "/orders/inbound",
     { method: "POST", body: JSON.stringify(payload) },
     (value) =>
@@ -162,12 +166,16 @@ export function createStockEntry(payload: CreateStockEntry): Promise<StockEntry>
       typeof value.quantity === "number" &&
       typeof value.reference === "string" &&
       isWarehouse(value.warehouse) &&
-      typeof value.created_at === "string",
-  );
+      typeof value.created_at === "string" &&
+      typeof value.user_uuid === "string",
+  ).then((entry) => {
+    if (product) trackInventoryOrderCreated("inbound_order_created", product, payload.quantity);
+    return entry;
+  });
 }
 
-export function createStockExit(payload: CreateStockExit): Promise<StockExit> {
-  return inventoryRequest(
+export function createStockExit(payload: CreateStockExit, product?: InventoryProduct): Promise<StockExit> {
+  return inventoryRequest<StockExit>(
     "/orders/outbound",
     { method: "POST", body: JSON.stringify(payload) },
     (value) =>
@@ -178,8 +186,14 @@ export function createStockExit(payload: CreateStockExit): Promise<StockExit> {
       (value.exit_type === "dispatch" || value.exit_type === "loss") &&
       (typeof value.tracking_number === "string" || value.tracking_number === null) &&
       isWarehouse(value.warehouse) &&
-      typeof value.created_at === "string",
-  );
+      typeof value.created_at === "string" &&
+      typeof value.user_uuid === "string",
+  ).then((exit) => {
+    if (product && payload.exit_type === "dispatch") {
+      trackInventoryOrderCreated("outbound_order_created", product, payload.quantity);
+    }
+    return exit;
+  });
 }
 
 export function getInventoryOrders(): Promise<InventoryOrder[]> {
@@ -188,4 +202,4 @@ export function getInventoryOrders(): Promise<InventoryOrder[]> {
     {},
     (value) => Array.isArray(value) && value.every(isOrder),
   );
-}
+}

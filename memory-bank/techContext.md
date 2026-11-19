@@ -1,11 +1,17 @@
 # Technical Context
 
-## Telemetry Contract
+## Telemetry Capture
 
-- `docs/telemetry/event-schemas.json` defines the version 1.0.0 envelope and
-  strict allowlists for 17 events; `telemetry-plan.md` documents their triggers
-  and operational purpose. No client ID may be inferred from display names, and
-  mandatory events without real trigger sources remain un-emitted.
+- The browser `TelemetryService` validates strict event/property allowlists,
+  creates opaque session identity, and batches best-effort events to
+  `/api/telemetry/events`. FastAPI validates the envelope and acknowledges the
+  batch without persistence or logging event content.
+- Current UI emitters are initial safe-route page view, successful/failed login,
+  successful inventory product-list view, API latency, sanitized frontend
+  errors, Web Vitals, and inbound/outbound events after successful API writes.
+  The inventory client uses an explicit client-name-to-stable-ID map for seeded
+  brands; threshold, direct-write rejection, and physical-count events still
+  need their real workflows.
 
 ## Current repository baseline
 

@@ -1,11 +1,20 @@
 # Progress
 
-## Telemetry Design
+## Telemetry Capture
 
-- Added the telemetry plan and strict JSON event schema: 17 event types total,
-  including 5 mandatory inventory events from the TrackFlow briefing and 12
-  identified opportunities. The plan records categories, triggers, decisions,
-  privacy limits, and unresolved event sources.
+- Added a strict validation-only telemetry batch endpoint returning HTTP 200
+  with an accepted-event count; it does not persist event contents. The
+  endpoint is configurable from the browser build.
+- Backoffice capture includes safe page views, login success/failure, product
+  views, API latency, sanitized frontend errors, Web Vitals, and inbound/outbound
+  events after successful stock API writes. Client IDs use an approved explicit
+  mapping for seeded brands.
+- Threshold, direct-edit-rejection, and physical discrepancy events remain
+  unavailable until their real trigger sources exist.
+- Verified the browser batch against the stub in Chrome DevTools Network: the
+  telemetry POST received HTTP 200. Web Vitals and a visual dashboard are not
+  stored or displayed by the stub; the additional visual dashboard is not part
+  of this capture part.
 
 ## Completed
 
