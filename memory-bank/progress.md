@@ -228,6 +228,12 @@
 
 - Added `POST /auth/forgot-password`, which issues a signed reset token for active users and queues a link through Resend as a background task. The endpoint returns the same 200 confirmation for known and unknown email addresses without waiting on provider latency.
 - Added `POST /auth/reset-password`, which validates the token signature, purpose, expiry, and server-side one-use record before updating the password hash. Invalid, expired, and replayed tokens return 400.
+
+## Milestone 6 — Part 1: Business Performance Pipeline Design (Complete)
+
+- Created `data/pipelines/PIPELINE_DESIGN.md` documenting the weekly warehouse & client performance pipeline.
+- Covers: Current State analysis (what telemetry captures, what the technical report answers, the business gap), Pipeline Purpose (named deliverable, KPIs from company-BRIEFING.md), Extraction format, 3-stage data flow (extract/transform/load), Destination table (`reporting.weekly_warehouse_client_performance`), idempotency strategy (upsert on unique constraint), execution log with 9 fields, Prefect mapping (1 flow, 4 tasks, configuration blocks), and 3 planned endpoints in `services/reporting/`.
+- Designs the pipeline to produce KPIs: Inbound Volume, Outbound Throughput, Stockout Frequency, Discrepancy Rate from mandatory telemetry events.
 - Added authenticated `POST /auth/change-password`, which verifies the current password before applying the new password and returns 400 for an incorrect current password.
 - Added persistent token records in TinyDB, storing a hash of each reset token ID and marking a record used when the password changes.
 - Added Resend integration in `services/api/email.py`; API key and sender are environment-only values. Root `.env.example`, `.gitignore` rules, `python-dotenv` loading, and `services/api/README.md` document local setup.
