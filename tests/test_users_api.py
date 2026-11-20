@@ -71,7 +71,7 @@ class TestListUsers:
         assert response.status_code == 200
         body = response.json()
         assert isinstance(body, list)
-        assert any(user["id"] == admin_account["user"].id for user in body)
+        assert any(user["id"] == admin_account["user"]["id"] for user in body)
 
     def test_edge_case_authenticated_user_can_list(self, client, auth_headers):
         """The list endpoint requires authentication but not admin role."""
