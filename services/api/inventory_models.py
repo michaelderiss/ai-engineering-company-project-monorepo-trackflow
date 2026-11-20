@@ -23,6 +23,7 @@ class SKU(SQLModel, table=True):
     client_name: str = Field(min_length=1, max_length=160)
     category: str = Field(max_length=32)
     warehouse: str = Field(max_length=3, index=True)
+    minimum_stock: int = Field(default=0, ge=0)
 
 
 class StockEntry(SQLModel, table=True):

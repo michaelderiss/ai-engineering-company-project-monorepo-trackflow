@@ -123,6 +123,7 @@ class SKUResponse(BaseModel):
     category: Literal["fashion", "electronics", "cosmetics"]
     warehouse: Literal["LA", "ZGZ"]
     current_stock: int
+    minimum_stock: int = 0
 
 
 class StockEntryResponse(BaseModel):
@@ -151,6 +152,7 @@ class SKUReferenceResponse(BaseModel):
     client_name: str
     category: Literal["fashion", "electronics", "cosmetics"]
     warehouse: Literal["LA", "ZGZ"]
+    minimum_stock: int = 0
 
     class Config:
         orm_mode = True

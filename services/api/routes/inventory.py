@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+from threading import RLock
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
@@ -13,6 +16,7 @@ from services.api.inventory_database import (
 )
 from services.api.inventory_models import SKU, StockEntry, StockExit
 from services.api.inventory_schemas import (
+    DiscrepancyReport,
     SKUCreate,
     StockEntryCreate,
     StockExitCreate,
@@ -25,8 +29,53 @@ from services.api.response_schemas import (
     StockExitResponse,
     StockOrderResponse,
 )
+from services.api import telemetry as telemetry_module
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
+
+# Crossing tracker for stock_threshold_triggered — thread-safe, capped.
+# Keyed by (sku_id, warehouse), tracks whether the SKU is currently below min.
+_threshold_below: dict[tuple[int, str], bool] = {}
+_threshold_lock = RLock()
+_CLIENT_IDS = {
+    "PureStep Footwear": "purestep_footwear",
+    "SoundWave Electronics": "soundwave_electronics",
+    "GlowLab Cosmetics": "glowlab_cosmetics",
+    "UrbanThread": "urbanthread",
+}
+
+
+def _emit_stock_threshold(sku: SKU, current_stock: int) -> None:
+    """Emit stock_threshold_triggered if a crossing occurs.
+
+    Crossing = SKU was at/above minimum and is now below minimum.
+    Re-arms only when stock returns to or above minimum.
+    """
+    min_stock = sku.minimum_stock or 0
+    client_id = _CLIENT_IDS.get(sku.client_name)
+    if not client_id:
+        return
+    key = (sku.id, sku.warehouse)
+    with _threshold_lock:
+        previously_below = _threshold_below.get(key, False)
+        now_below = current_stock < min_stock
+
+        if now_below and not previously_below:
+            _threshold_below[key] = True
+            telemetry_module.record_server_event(
+                "stock_threshold_triggered",
+                {
+                    "warehouse": "los_angeles" if sku.warehouse == "LA" else "zaragoza",
+                    "client_id": client_id,
+                    "product_id": sku.sku,
+                    "product_category": sku.category,
+                    "quantity": current_stock,
+                    "minimum_stock": min_stock,
+                },
+            )
+        elif not now_below and previously_below:
+            # Re-arm: stock is now at or above minimum again
+            _threshold_below[key] = False
 
 
 def _sku_response(sku: SKU, session: Session) -> SKUResponse:
@@ -39,6 +88,7 @@ def _sku_response(sku: SKU, session: Session) -> SKUResponse:
         category=sku.category,
         warehouse=sku.warehouse,
         current_stock=entries - exits,
+        minimum_stock=sku.minimum_stock,
     )
 
 
@@ -52,7 +102,11 @@ def _ensure_sku_warehouse(sku: SKU, warehouse: str) -> None:
 
 @router.get("/products", response_model=list[SKUResponse])
 def get_products(session: Session = Depends(get_inventory_session)):
-    return cached_json(catalog_cache, session.get_bind(), lambda: [SKUResponse(**row) for row in list_skus_with_stock(session)])
+    return cached_json(
+        catalog_cache,
+        session.get_bind(),
+        lambda: [SKUResponse(**row) for row in list_skus_with_stock(session)],
+    )
 
 
 @router.post(
@@ -72,7 +126,9 @@ def post_product(
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise HTTPException(status_code=409, detail="A SKU with this code already exists.") from exc
+        raise HTTPException(
+            status_code=409, detail="A SKU with this code already exists."
+        ) from exc
     catalog_cache.clear()
     session.refresh(sku)
     return _sku_response(sku, session)
@@ -149,6 +205,10 @@ def post_outbound_order(
     session.commit()
     catalog_cache.clear()
     session.refresh(stock_exit)
+
+    new_available = (entries - exits) - payload.quantity
+    _emit_stock_threshold(sku, new_available)
+
     return stock_exit
 
 
@@ -192,4 +252,45 @@ def get_orders(
             )
         )
 
-    return sorted(orders, key=lambda order: (order.created_at, order.order_type, order.id), reverse=True)
+    return sorted(
+        orders,
+        key=lambda order: (order.created_at, order.order_type, order.id),
+        reverse=True,
+    )
+
+
+@router.post("/discrepancy", status_code=status.HTTP_201_CREATED)
+def report_discrepancy(
+    payload: DiscrepancyReport,
+    session: Session = Depends(get_inventory_session),
+) -> dict[str, object]:
+    """Record a physical-count discrepancy and emit an inventory_discrepancy_detected event."""
+    sku = session.get(SKU, payload.sku_id)
+    if sku is None:
+        raise HTTPException(status_code=404, detail="SKU not found.")
+    if sku.warehouse != payload.warehouse:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"SKU '{sku.sku}' is assigned to warehouse {sku.warehouse}.",
+        )
+
+    discrepancy = abs(payload.physical_quantity - payload.system_quantity)
+    client_id = _CLIENT_IDS.get(sku.client_name)
+    if client_id and discrepancy > 0:
+        telemetry_module.record_server_event("inventory_discrepancy_detected", {
+            "warehouse": "los_angeles" if payload.warehouse == "LA" else "zaragoza",
+            "client_id": client_id,
+            "product_id": sku.sku,
+            "product_category": sku.category,
+            "quantity": discrepancy,
+            "system_quantity": payload.system_quantity,
+            "physical_quantity": payload.physical_quantity,
+        })
+
+    return {
+        "sku_id": payload.sku_id,
+        "warehouse": payload.warehouse,
+        "system_quantity": payload.system_quantity,
+        "physical_quantity": payload.physical_quantity,
+        "discrepancy": discrepancy,
+    }

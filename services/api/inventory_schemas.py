@@ -16,6 +16,7 @@ class SKUCreate(BaseModel):
     client_name: str = Field(..., min_length=1, max_length=160)
     category: Category
     warehouse: Warehouse
+    minimum_stock: int = Field(default=0, ge=0)
 
     class Config:
         extra = "forbid"
@@ -103,3 +104,15 @@ class StockOrderRead(BaseModel):
     warehouse: Warehouse
     created_at: datetime
     sku: SKUReference
+
+
+class DiscrepancyReport(BaseModel):
+    """Submit a physical-count discrepancy for audit."""
+    sku_id: int = Field(..., gt=0)
+    warehouse: Warehouse
+    system_quantity: int = Field(..., ge=0)
+    physical_quantity: int = Field(..., ge=0)
+    notes: str | None = Field(default=None, max_length=500)
+
+    class Config:
+        extra = "forbid"

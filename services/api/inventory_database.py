@@ -38,79 +38,89 @@ if not DATABASE_URL:
 engine = create_database_engine(DATABASE_URL)
 
 SKU_SEED = [
-    {
-        "name": "Classic White Sneaker - Size 42",
-        "sku": "CLT-SNK-W-42",
-        "client_name": "PureStep Footwear",
-        "category": "fashion",
-        "warehouse": "LA",
-    },
-    {
-        "name": "Classic White Sneaker - Size 42",
-        "sku": "CLT-SNK-W-42-Z",
-        "client_name": "PureStep Footwear",
-        "category": "fashion",
-        "warehouse": "ZGZ",
-    },
-    {
-        "name": "Wireless Earbuds Pro",
-        "sku": "TEC-EAR-001",
-        "client_name": "SoundWave Electronics",
-        "category": "electronics",
-        "warehouse": "LA",
-    },
-    {
-        "name": "Hydrating Face Serum 30ml",
-        "sku": "CSM-SRM-030",
-        "client_name": "GlowLab Cosmetics",
-        "category": "cosmetics",
-        "warehouse": "ZGZ",
-    },
-    {
-        "name": "Slim Fit Chino - Navy 32/32",
-        "sku": "CLT-CHN-N-32",
-        "client_name": "UrbanThread",
-        "category": "fashion",
-        "warehouse": "LA",
-    },
-    {
-        "name": "USB-C Fast Charger 65W",
-        "sku": "TEC-CHG-065",
-        "client_name": "SoundWave Electronics",
-        "category": "electronics",
-        "warehouse": "ZGZ",
-    },
+    # PureStep Footwear — fashion — Los Angeles (2) + Zaragoza (2)
+    {"name": "Classic White Sneaker - Size 42", "sku": "CLT-SNK-W-42", "client_name": "PureStep Footwear", "category": "fashion", "warehouse": "LA", "minimum_stock": 10},
+    {"name": "Classic White Sneaker - Size 42", "sku": "CLT-SNK-W-42-Z", "client_name": "PureStep Footwear", "category": "fashion", "warehouse": "ZGZ", "minimum_stock": 8},
+    {"name": "Black Leather Boot - Size 44", "sku": "CLT-BOT-B-44", "client_name": "PureStep Footwear", "category": "fashion", "warehouse": "LA", "minimum_stock": 5},
+    {"name": "Organic Cotton T-Shirt - White M", "sku": "CLT-TSH-W-M", "client_name": "PureStep Footwear", "category": "fashion", "warehouse": "ZGZ", "minimum_stock": 15},
+    # SoundWave Electronics — electronics — both warehouses
+    {"name": "Wireless Earbuds Pro", "sku": "TEC-EAR-001", "client_name": "SoundWave Electronics", "category": "electronics", "warehouse": "LA", "minimum_stock": 6},
+    {"name": "USB-C Fast Charger 65W", "sku": "TEC-CHG-065", "client_name": "SoundWave Electronics", "category": "electronics", "warehouse": "ZGZ", "minimum_stock": 4},
+    {"name": "Bluetooth Speaker Waterproof", "sku": "TEC-SPK-001", "client_name": "SoundWave Electronics", "category": "electronics", "warehouse": "LA", "minimum_stock": 3},
+    {"name": "Smartphone Tripod Stand", "sku": "TEC-TRP-001", "client_name": "SoundWave Electronics", "category": "electronics", "warehouse": "ZGZ", "minimum_stock": 2},
+    # GlowLab Cosmetics — cosmetics — Los Angeles
+    {"name": "Hydrating Face Serum 30ml", "sku": "CSM-SRM-030", "client_name": "GlowLab Cosmetics", "category": "cosmetics", "warehouse": "ZGZ", "minimum_stock": 10},
+    {"name": "Vitamin C Night Cream 50ml", "sku": "CSM-CRM-050", "client_name": "GlowLab Cosmetics", "category": "cosmetics", "warehouse": "LA", "minimum_stock": 8},
 ]
 
 ENTRY_SEED = [
+    # PureStep LA — CLT-SNK-W-42 (minimum 10)
     {"sku": "CLT-SNK-W-42", "quantity": 20, "reference": "PO-2024-0098", "warehouse": "LA"},
     {"sku": "CLT-SNK-W-42", "quantity": 8, "reference": "GR-LA-0234", "warehouse": "LA"},
+    {"sku": "CLT-SNK-W-42", "quantity": 5, "reference": "PO-2024-0105", "warehouse": "LA"},
+    # PureStep ZGZ — CLT-SNK-W-42-Z (minimum 8)
     {"sku": "CLT-SNK-W-42-Z", "quantity": 16, "reference": "PO-2024-0112", "warehouse": "ZGZ"},
+    {"sku": "CLT-SNK-W-42-Z", "quantity": 4, "reference": "GR-ZGZ-0118", "warehouse": "ZGZ"},
+    # PureStep LA — CLT-BOT-B-44 (minimum 5)
+    {"sku": "CLT-BOT-B-44", "quantity": 10, "reference": "PO-2024-0123", "warehouse": "LA"},
+    # PureStep ZGZ — CLT-TSH-W-M (minimum 15)
+    {"sku": "CLT-TSH-W-M", "quantity": 20, "reference": "PO-2024-0130", "warehouse": "ZGZ"},
+    {"sku": "CLT-TSH-W-M", "quantity": 15, "reference": "GR-ZGZ-0134", "warehouse": "ZGZ"},
+    # SoundWave LA — TEC-EAR-001 (minimum 6)
     {"sku": "TEC-EAR-001", "quantity": 12, "reference": "GR-LA-0291", "warehouse": "LA"},
+    {"sku": "TEC-EAR-001", "quantity": 8, "reference": "PO-2024-0295", "warehouse": "LA"},
+    # SoundWave ZGZ — TEC-CHG-065 (minimum 4)
+    {"sku": "TEC-CHG-065", "quantity": 10, "reference": "PO-2024-0302", "warehouse": "ZGZ"},
+    # SoundWave LA — TEC-SPK-001 (minimum 3)
+    {"sku": "TEC-SPK-001", "quantity": 6, "reference": "PO-2024-0310", "warehouse": "LA"},
+    # SoundWave ZGZ — TEC-TRP-001 (minimum 2)
+    {"sku": "TEC-TRP-001", "quantity": 8, "reference": "PO-2024-0315", "warehouse": "ZGZ"},
+    # GlowLab ZGZ — CSM-SRM-030 (minimum 10)
+    {"sku": "CSM-SRM-030", "quantity": 14, "reference": "PO-2024-0322", "warehouse": "ZGZ"},
+    {"sku": "CSM-SRM-030", "quantity": 6, "reference": "GR-ZGZ-0325", "warehouse": "ZGZ"},
+    # GlowLab LA — CSM-CRM-050 (minimum 8)
+    {"sku": "CSM-CRM-050", "quantity": 12, "reference": "PO-2024-0330", "warehouse": "LA"},
+    {"sku": "CSM-CRM-050", "quantity": 8, "reference": "PO-2024-0334", "warehouse": "LA"},
+    {"sku": "CSM-CRM-050", "quantity": 3, "reference": "GR-LA-0337", "warehouse": "LA"},
 ]
 
 EXIT_SEED = [
-    {
-        "sku": "CLT-SNK-W-42",
-        "quantity": 3,
-        "exit_type": "dispatch",
-        "tracking_number": "1Z999AA10123456784",
-        "warehouse": "LA",
-    },
-    {
-        "sku": "CLT-SNK-W-42-Z",
-        "quantity": 2,
-        "exit_type": "loss",
-        "tracking_number": None,
-        "warehouse": "ZGZ",
-    },
-    {
-        "sku": "TEC-EAR-001",
-        "quantity": 1,
-        "exit_type": "dispatch",
-        "tracking_number": "1Z999AA10987654321",
-        "warehouse": "LA",
-    },
+    # CLT-SNK-W-42 LA — many dispatches will drive it below minimum 10 → triggers threshold
+    {"sku": "CLT-SNK-W-42", "quantity": 3, "exit_type": "dispatch", "tracking_number": "1Z999AA10123456784", "warehouse": "LA"},
+    {"sku": "CLT-SNK-W-42", "quantity": 5, "exit_type": "dispatch", "tracking_number": "1Z999AA10123456785", "warehouse": "LA"},
+    {"sku": "CLT-SNK-W-42", "quantity": 4, "exit_type": "dispatch", "tracking_number": "1Z999AA10123456786", "warehouse": "LA"},
+    {"sku": "CLT-SNK-W-42", "quantity": 6, "exit_type": "dispatch", "tracking_number": "1Z999AA20123456701", "warehouse": "LA"},
+    # CLT-SNK-W-42-Z ZGZ — (minimum 8)
+    {"sku": "CLT-SNK-W-42-Z", "quantity": 2, "exit_type": "loss", "tracking_number": None, "warehouse": "ZGZ"},
+    {"sku": "CLT-SNK-W-42-Z", "quantity": 7, "exit_type": "dispatch", "tracking_number": "1Z999AA20123456702", "warehouse": "ZGZ"},
+    {"sku": "CLT-SNK-W-42-Z", "quantity": 3, "exit_type": "dispatch", "tracking_number": "1Z999AA20123456703", "warehouse": "ZGZ"},
+    {"sku": "CLT-SNK-W-42-Z", "quantity": 5, "exit_type": "dispatch", "tracking_number": "1Z999AA20123456704", "warehouse": "ZGZ"},
+    # CLT-BOT-B-44 LA — (minimum 5) — stays above
+    {"sku": "CLT-BOT-B-44", "quantity": 2, "exit_type": "dispatch", "tracking_number": "1Z999AA30123456701", "warehouse": "LA"},
+    {"sku": "CLT-BOT-B-44", "quantity": 1, "exit_type": "dispatch", "tracking_number": "1Z999AA30123456702", "warehouse": "LA"},
+    # CLT-TSH-W-M ZGZ — (minimum 15) — heavy dispatches trigger threshold
+    {"sku": "CLT-TSH-W-M", "quantity": 10, "exit_type": "dispatch", "tracking_number": "1Z999AA40123456701", "warehouse": "ZGZ"},
+    {"sku": "CLT-TSH-W-M", "quantity": 8, "exit_type": "dispatch", "tracking_number": "1Z999AA40123456702", "warehouse": "ZGZ"},
+    {"sku": "CLT-TSH-W-M", "quantity": 5, "exit_type": "dispatch", "tracking_number": "1Z999AA40123456703", "warehouse": "ZGZ"},
+    # TEC-EAR-001 LA — (minimum 6) — dispatches drive below threshold
+    {"sku": "TEC-EAR-001", "quantity": 1, "exit_type": "dispatch", "tracking_number": "1Z999AA10987654321", "warehouse": "LA"},
+    {"sku": "TEC-EAR-001", "quantity": 4, "exit_type": "dispatch", "tracking_number": "1Z999AA10987654322", "warehouse": "LA"},
+    {"sku": "TEC-EAR-001", "quantity": 3, "exit_type": "dispatch", "tracking_number": "1Z999AA10987654323", "warehouse": "LA"},
+    # TEC-CHG-065 ZGZ — (minimum 4) — stays above
+    {"sku": "TEC-CHG-065", "quantity": 1, "exit_type": "dispatch", "tracking_number": "1Z999AA50123456701", "warehouse": "ZGZ"},
+    {"sku": "TEC-CHG-065", "quantity": 2, "exit_type": "dispatch", "tracking_number": "1Z999AA50123456702", "warehouse": "ZGZ"},
+    # TEC-SPK-001 LA — (minimum 3) — stays at threshold
+    {"sku": "TEC-SPK-001", "quantity": 2, "exit_type": "dispatch", "tracking_number": "1Z999AA60123456701", "warehouse": "LA"},
+    # TEC-TRP-001 ZGZ — (minimum 2) — stays above
+    {"sku": "TEC-TRP-001", "quantity": 1, "exit_type": "loss", "tracking_number": None, "warehouse": "ZGZ"},
+    # CSM-SRM-030 ZGZ — (minimum 10) — dispatches stay near threshold
+    {"sku": "CSM-SRM-030", "quantity": 3, "exit_type": "dispatch", "tracking_number": "1Z999AA70123456701", "warehouse": "ZGZ"},
+    {"sku": "CSM-SRM-030", "quantity": 5, "exit_type": "dispatch", "tracking_number": "1Z999AA70123456702", "warehouse": "ZGZ"},
+    # CSM-CRM-050 LA — (minimum 8) — heavy dispatches + losses trigger threshold
+    {"sku": "CSM-CRM-050", "quantity": 4, "exit_type": "dispatch", "tracking_number": "1Z999AA80123456701", "warehouse": "LA"},
+    {"sku": "CSM-CRM-050", "quantity": 2, "exit_type": "loss", "tracking_number": None, "warehouse": "LA"},
+    {"sku": "CSM-CRM-050", "quantity": 6, "exit_type": "dispatch", "tracking_number": "1Z999AA80123456702", "warehouse": "LA"},
+    {"sku": "CSM-CRM-050", "quantity": 3, "exit_type": "dispatch", "tracking_number": "1Z999AA80123456703", "warehouse": "LA"},
 ]
 
 
@@ -244,6 +254,7 @@ def list_skus_with_stock(session: Session) -> list[dict[str, object]]:
             "warehouse": sku.warehouse,
             "current_stock": entries.get((sku.id, sku.warehouse), 0)
             - exits.get((sku.id, sku.warehouse), 0),
+            "minimum_stock": sku.minimum_stock,
         }
         for sku in skus
     ]
