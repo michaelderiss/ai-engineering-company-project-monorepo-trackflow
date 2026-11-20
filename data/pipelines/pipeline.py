@@ -4,6 +4,11 @@ Reads from telemetry_events (read-only) and produces business KPIs in
 the reporting schema. Built with Prefect for resilience, observability,
 and recoverability.
 
+The main flow orchestrates three subflows:
+  1. extraction_subflow  — reads events from telemetry_events
+  2. transformation_subflow — computes KPI aggregates
+  3. load_subflow        — upserts results and saves optional snapshot
+
 Run: python data/pipelines/pipeline.py
 Schedule: Monday 01:00 UTC (cron: ``0 1 * * 1``)
 
@@ -20,7 +25,6 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 import pandas as pd
 from prefect import flow, task
@@ -61,16 +65,33 @@ EVENT_TYPE_TO_KPI = {
     "inventory_discrepancy_detected": "discrepancy_events_count",
 }
 
+BRIEFING_KPI_LABELS = {
+    "inbound_units_count": "Inbound Volume",
+    "outbound_orders_count": "Outbound Throughput",
+    "stockout_events_count": "Stockout Frequency",
+    "discrepancy_events_count": "Discrepancy Events (supporting)",
+    "discrepancy_rate": "Discrepancy Rate",
+}
+
 # ──────────────────────────────────────────────────────────────────────
 # Helper: compute the Monday of the ISO week for a given date
 # ──────────────────────────────────────────────────────────────────────
 
-def _iso_week_start(dt: datetime) -> str:
-    """Return the Monday date string (YYYY-MM-DD) of the ISO week containing dt."""
-    # ISO week: Monday=0, Sunday=6
-    days_since_monday = dt.weekday()
-    monday = dt - timedelta(days=days_since_monday)
-    return monday.strftime("%Y-%m-%d")
+def _iso_week_start(task_run, input_mapping: dict) -> str:
+    """Return the Monday date string of the ISO week from the input mapping.
+
+    Prefect 2.x calls cache_key_fn with ``(task_run, input_mapping)``.
+    The input mapping contains the keyword arguments passed to the task,
+    so we extract the target week from whichever parameter is present.
+    """
+    week_val = input_mapping.get("week_start")
+    if week_val is not None:
+        dt = datetime.strptime(week_val, "%Y-%m-%d") if isinstance(week_val, str) else week_val
+    else:
+        dt = datetime.now(timezone.utc)
+    days_since_monday = dt.weekday() if hasattr(dt, "weekday") else 0
+    monday = dt - timedelta(days=days_since_monday) if hasattr(dt, "weekday") else dt
+    return monday.strftime("%Y-%m-%d") if hasattr(monday, "strftime") else str(monday)
 
 
 def _last_completed_iso_week() -> str:
@@ -80,16 +101,14 @@ def _last_completed_iso_week() -> str:
     Otherwise, it's the previous Monday.
     """
     now = datetime.now(timezone.utc)
-    # Go back to the previous Monday by subtracting days since Monday + 7
     days_since_monday = now.weekday()
-    # If today is Monday (0), the last completed week started 7 days ago
     offset = days_since_monday + 7 if days_since_monday == 0 else days_since_monday
     last_monday = now - timedelta(days=offset)
     return last_monday.strftime("%Y-%m-%d")
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Task 1: Extract — read events from telemetry_events
+# Task definitions (leaf tasks used by subflows)
 # ──────────────────────────────────────────────────────────────────────
 
 @task(retries=3, retry_delay_seconds=30)
@@ -102,8 +121,8 @@ def extract_events(week_start: str) -> pd.DataFrame:
     30-second gaps cover common transient failures within a ~2-minute window
     without blocking the pipeline for too long.
     """
-    logger = get_run_logger(__name__)
-    logger.info("Extracting events for week starting %s", week_start)
+    run_logger = get_run_logger(__name__)
+    run_logger.info("Extracting events for week starting %s", week_start)
 
     week_end = (
         datetime.strptime(week_start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -134,76 +153,85 @@ def extract_events(week_start: str) -> pd.DataFrame:
             },
         ).mappings().all()
 
-    logger.info("Extracted %d raw events", len(rows))
+    run_logger.info("Extracted %d raw events", len(rows))
     return pd.DataFrame([dict(row) for row in rows])
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Task 2: Transform — compute KPIs from extracted events
+# Pure KPI computation logic (no Prefect dependency)
 # ──────────────────────────────────────────────────────────────────────
 
-@task(cache_key_fn=_iso_week_start, cache_expiration=timedelta(hours=1))
-def compute_kpis(events_df: pd.DataFrame) -> list[dict[str, Any]]:
-    """Group events by warehouse × client × week and compute KPI aggregates.
+def compute_kpis_logic(events_df: pd.DataFrame) -> list[dict[str, Any]]:
+    """Compute KPI rows from a DataFrame of telemetry events.
 
-    Caching: cache key is the week_start string (derived from _iso_week_start).
-    Cache expires after 1 hour.
-    Justification: If the pipeline is re-run within the same hour for the same
-    week (e.g., due to a manual trigger after a failed run), the transformation
-    result is reused without re-computing. This is safe because the extract
-    layer always re-reads from the database, so any new events are picked up on
-    the next cache miss. One hour matches the typical delay between re-runs.
+    This is a pure function with no Prefect or database dependency.
+    It can be tested in isolation with in-memory fixtures.
+
+    Parameters
+    ----------
+    events_df : pd.DataFrame
+        Must contain columns: event_id, event_type, event_timestamp,
+        properties_json (JSON string).
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        KPI rows with warehouse, client_id, week_start, and the four
+        KPI fields (inbound_units_count, outbound_orders_count,
+        stockout_events_count, discrepancy_events_count,
+        discrepancy_rate).
     """
-    logger = get_run_logger(__name__)
-
     if events_df.empty:
-        logger.info("No events to transform — returning empty list")
         return []
 
+    df = events_df.copy()
+
     # Parse properties JSON
-    events_df["properties"] = events_df["properties_json"].map(
+    df["properties"] = df["properties_json"].map(
         lambda x: json.loads(x) if isinstance(x, str) else {}
     )
 
-    # Derive week_start from event_timestamp
-    events_df["event_timestamp"] = pd.to_datetime(
-        events_df["event_timestamp"], utc=True, errors="coerce"
+    # Parse timestamps
+    df["event_timestamp"] = pd.to_datetime(
+        df["event_timestamp"], utc=True, errors="coerce"
     )
-    events_df = events_df.dropna(subset=["event_timestamp"]).copy()
-    events_df["week_start"] = events_df["event_timestamp"].map(
+    df = df.dropna(subset=["event_timestamp"]).copy()
+
+    if df.empty:
+        return []
+
+    # Derive week_start from event_timestamp
+    df["week_start"] = df["event_timestamp"].map(
         lambda ts: ts.strftime("%Y-%m-%d")
     )
 
-    # Ensure we only process the target week (extraction boundary is already
-    # enforced in SQL, but double-check for safety)
-    target_week = events_df["week_start"].iloc[0]
-    events_df = events_df[events_df["week_start"] == target_week]
+    # Only process the first (and expected only) week in the data
+    target_week = df["week_start"].iloc[0]
+    df = df[df["week_start"] == target_week]
 
-    if events_df.empty:
-        logger.info("No events for the target week after filtering")
+    if df.empty:
         return []
 
     # Flatten properties
-    events_df["warehouse"] = events_df["properties"].map(
+    df["warehouse"] = df["properties"].map(
         lambda p: p.get("warehouse") if isinstance(p, dict) else None
     )
-    events_df["client_id"] = events_df["properties"].map(
+    df["client_id"] = df["properties"].map(
         lambda p: p.get("client_id") if isinstance(p, dict) else None
     )
-    events_df["quantity"] = events_df["properties"].map(
+    df["quantity"] = df["properties"].map(
         lambda p: p.get("quantity", 0) if isinstance(p, dict) else 0
     )
-    events_df["quantity"] = pd.to_numeric(events_df["quantity"], errors="coerce").fillna(0).astype(int)
+    df["quantity"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0).astype(int)
 
     # Drop rows with missing warehouse/client_id
-    events_df = events_df.dropna(subset=["warehouse", "client_id"])
+    df = df.dropna(subset=["warehouse", "client_id"])
 
-    if events_df.empty:
-        logger.info("All events were missing warehouse or client_id — no KPIs to compute")
+    if df.empty:
         return []
 
-    # Group by warehouse × client_id × week_start
-    groups = events_df.groupby(["warehouse", "client_id", "week_start"])
+    # Group by warehouse x client_id x week_start
+    groups = df.groupby(["warehouse", "client_id", "week_start"])
 
     results: list[dict[str, Any]] = []
     for (warehouse, client_id, week_start), group in groups:
@@ -224,13 +252,29 @@ def compute_kpis(events_df: pd.DataFrame) -> list[dict[str, Any]]:
             "discrepancy_rate": disc_rate,
         })
 
-    logger.info("Computed %d KPI rows", len(results))
     return results
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Task 3: Load — upsert KPI rows into the reporting table
-# ──────────────────────────────────────────────────────────────────────
+@task(cache_key_fn=_iso_week_start, cache_expiration=timedelta(hours=1))
+def compute_kpis(events_df: pd.DataFrame) -> list[dict[str, Any]]:
+    """Prefect task: group events by warehouse x client x week and compute KPI aggregates.
+
+    Delegates the pure computation to ``compute_kpis_logic``.
+
+    Caching: cache key is the week_start string (derived from _iso_week_start).
+    Cache expires after 1 hour.
+    Justification: If the pipeline is re-run within the same hour for the same
+    week (e.g., due to a manual trigger after a failed run), the transformation
+    result is reused without re-computing. This is safe because the extract
+    layer always re-reads from the database, so any new events are picked up on
+    the next cache miss. One hour matches the typical delay between re-runs.
+    """
+    run_logger = get_run_logger(__name__)
+    run_logger.info("Starting KPI computation on %d events", len(events_df))
+    result = compute_kpis_logic(events_df)
+    run_logger.info("Computed %d KPI rows", len(result))
+    return result
+
 
 @task(retries=2, retry_delay_seconds=15)
 def load_reporting_rows(kpi_rows: list[dict[str, Any]]) -> int:
@@ -239,22 +283,18 @@ def load_reporting_rows(kpi_rows: list[dict[str, Any]]) -> int:
     Retries: 2 attempts with 15-second delays.
     Justification: The load touches the database and may hit transient
     connection issues. Two retries with short delays are sufficient because
-    the upsert is idempotent — partial writes from a failed attempt are
+    the upsert is idempotent -- partial writes from a failed attempt are
     overwritten on retry.
     """
-    logger = get_run_logger(__name__)
+    run_logger = get_run_logger(__name__)
     if not kpi_rows:
-        logger.info("No KPI rows to load — skipping")
+        run_logger.info("No KPI rows to load -- skipping")
         return 0
 
     count = upsert_weekly_performance(kpi_rows)
-    logger.info("Upserted %d KPI rows into reporting schema", count)
+    run_logger.info("Upserted %d KPI rows into reporting schema", count)
     return count
 
-
-# ──────────────────────────────────────────────────────────────────────
-# Optional Task: Snapshot eval — save KPI rows as JSON for validation
-# ──────────────────────────────────────────────────────────────────────
 
 @task
 def snapshot_eval(kpi_rows: list[dict[str, Any]], week_start: str) -> str | None:
@@ -263,9 +303,9 @@ def snapshot_eval(kpi_rows: list[dict[str, Any]], week_start: str) -> str | None
     This is an optional/non-critical step. A failure here must not block
     the main pipeline execution.
     """
-    logger = get_run_logger(__name__)
+    run_logger = get_run_logger(__name__)
     if not kpi_rows:
-        logger.info("No KPI rows to snapshot — skipping")
+        run_logger.info("No KPI rows to snapshot -- skipping")
         return None
 
     eval_dir = _PROJECT / "data" / "eval"
@@ -286,15 +326,92 @@ def snapshot_eval(kpi_rows: list[dict[str, Any]], week_start: str) -> str | None
                 f,
                 indent=2,
             )
-        logger.info("Snapshot saved to %s", filepath)
+        run_logger.info("Snapshot saved to %s", filepath)
         return str(filepath)
     except OSError as exc:
-        logger.warning("Failed to save eval snapshot: %s", exc)
+        run_logger.warning("Failed to save eval snapshot: %s", exc)
         return None
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Main flow — orchestrates the pipeline
+# Subflow 1: Extraction
+# ──────────────────────────────────────────────────────────────────────
+
+@flow(name="Extraction Subflow")
+def extraction_subflow(week_start: str) -> pd.DataFrame:
+    """Extract telemetry events for the given ISO week.
+
+    This subflow ensures the reporting schema exists, then runs the
+    extract task. It can be executed independently for debugging or
+    ad-hoc extraction.
+    """
+    run_logger = get_run_logger(__name__)
+    run_logger.info("Extraction subflow: week_start=%s", week_start)
+
+    # Ensure the reporting schema exists before proceeding
+    ensure_reporting_schema()
+
+    events_df = extract_events(week_start)
+    return events_df
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Subflow 2: Transformation
+# ──────────────────────────────────────────────────────────────────────
+
+@flow(name="Transformation Subflow")
+def transformation_subflow(events_df: pd.DataFrame) -> list[dict[str, Any]]:
+    """Transform extracted events into KPI rows.
+
+    This subflow wraps the compute_kpis task with caching. It can be
+    executed independently with in-memory fixtures for testing.
+    """
+    run_logger = get_run_logger(__name__)
+    run_logger.info("Transformation subflow: %d events received", len(events_df))
+
+    kpi_rows = compute_kpis(events_df)
+    return kpi_rows
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Subflow 3: Load
+# ──────────────────────────────────────────────────────────────────────
+
+@flow(name="Load Subflow")
+def load_subflow(kpi_rows: list[dict[str, Any]], week_start: str) -> dict[str, Any]:
+    """Load KPI rows into the reporting schema and save an optional snapshot.
+
+    The load is idempotent (upsert). The snapshot step is optional and
+    its failure does not block the overall result.
+
+    Returns a dict with ``records_loaded`` and ``snapshot_saved`` keys.
+    """
+    run_logger = get_run_logger(__name__)
+    run_logger.info("Load subflow: %d KPI rows, week=%s", len(kpi_rows), week_start)
+
+    # Stage 3a: Idempotent upsert
+    records_loaded = load_reporting_rows(kpi_rows)
+
+    # Stage 3b: Optional snapshot (non-critical)
+    snapshot_result = snapshot_eval.with_options(return_state=True)(
+        kpi_rows, week_start
+    )
+    snapshot_saved = (
+        snapshot_result.result.is_completed()
+        if hasattr(snapshot_result, "result")
+        and hasattr(snapshot_result.result, "is_completed")
+        and snapshot_result.result.is_completed()
+        else False
+    )
+
+    return {
+        "records_loaded": records_loaded,
+        "snapshot_saved": snapshot_saved,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Main flow — orchestrates the pipeline via subflows
 # ──────────────────────────────────────────────────────────────────────
 
 @flow(name="Weekly Warehouse and Client Performance")
@@ -302,12 +419,15 @@ def weekly_warehouse_client_performance_flow(
     week_start: str | None = None,
     triggered_by: str = "manual",
 ) -> dict[str, Any]:
-    """Main pipeline flow: extract → transform → load with optional snapshot.
+    """Main pipeline flow: extraction_subflow -> transformation_subflow -> load_subflow.
+
+    Each phase is an independent subflow with explicit inputs and outputs.
+    The main flow handles orchestration, run tracking, and error handling.
 
     Args:
         week_start: ISO week Monday date (YYYY-MM-DD). Defaults to the last
             completed ISO week.
-        triggered_by: Source of the trigger — ``scheduler`` or ``manual``.
+        triggered_by: Source of the trigger -- ``scheduler`` or ``manual``.
 
     Returns:
         Dict with run summary: run_id, week_start, status, records counts.
@@ -321,31 +441,17 @@ def weekly_warehouse_client_performance_flow(
     run_id = create_pipeline_run(week_start, triggered_by=triggered_by)
 
     try:
-        # Ensure the reporting schema and tables exist
-        ensure_reporting_schema()
-
-        # Stage 1: Extract
-        events_df = extract_events(week_start)
+        # Subflow 1: Extraction
+        events_df = extraction_subflow(week_start)
         records_extracted = len(events_df)
 
-        # Stage 2: Transform
-        kpi_rows = compute_kpis(events_df)
+        # Subflow 2: Transformation
+        kpi_rows = transformation_subflow(events_df)
 
-        # Stage 3: Load (idempotent upsert)
-        records_loaded = load_reporting_rows(kpi_rows)
-
-        # Optional: Snapshot for validation (non-critical — failure won't block)
-        snapshot_result = snapshot_eval.with_options(return_state=True)(
-            kpi_rows, week_start
-        )
-        # Check if the optional task succeeded
-        snapshot_saved = (
-            snapshot_result.result.is_completed()
-            if hasattr(snapshot_result, "result")
-            and hasattr(snapshot_result.result, "is_completed")
-            and snapshot_result.result.is_completed()
-            else False
-        )
+        # Subflow 3: Load (idempotent upsert + optional snapshot)
+        load_result = load_subflow(kpi_rows, week_start)
+        records_loaded = load_result["records_loaded"]
+        snapshot_saved = load_result["snapshot_saved"]
 
         # Record successful completion
         complete_pipeline_run(

@@ -301,3 +301,23 @@
   - `uis/backoffice`: `npm run build` succeeded
 
 This is the current working baseline to preserve before additional feature work or remote merges.
+
+## Milestone 6 — Pipeline Enhancement (Business Performance Pipeline) ✅ Complete
+
+**Part 1 — Design Document**
+- Created `data/pipelines/PIPELINE_DESIGN.md` covering current state, KPI definitions, 3-stage data flow, destination table, idempotency strategy, execution log, Prefect mapping, and 3 planned API endpoints.
+
+**Part 2 — Resilient Pipeline Implementation**
+- Set up Python venv with Prefect 2.20.27 (compatible with project pydantic<2 constraint).
+- Created `services/reporting/` package with database schema DDL (`reporting_daily_kpis`, `pipeline_run_log`) and 3 FastAPI endpoints (latest run, manual trigger, weekly KPI query).
+- Created `data/pipelines/pipeline.py` with Prefect flow: 4 tasks (extract_events with 3 retries, compute_kpis with caching, load_reporting_rows with 2 retries, snapshot_eval as optional).
+- Verified imports and routes load successfully.
+
+**Part 3 — Subflow Refactor, Tests & Dashboard**
+- Refactored `data/pipelines/pipeline.py` into 3 named subflows (`extraction_subflow`, `transformation_subflow`, `load_subflow`).
+- Extracted pure `compute_kpis_logic()` function (no Prefect dependency) for unit testing.
+- Created `tests/pipelines/` with 5 unit tests covering: hand-computed KPIs, zero outbound discrepancy rate, multi-warehouse/clients, empty input, malformed input. All pass.
+- Created `uis/backoffice/lib/reporting.ts` — API types and fetch functions.
+- Created `uis/backoffice/app/reporting/page.tsx` — Business Performance Dashboard with pipeline status and 5 KPI cards per warehouse/client.
+- Added Reporting Dashboard link to home page application launcher.
+- Committed and pushed to `origin/M6Pipelines`. Pull request created.
