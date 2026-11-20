@@ -40,7 +40,7 @@ def stored_user():
     def _create(password: str = "InitialPass123!") -> tuple:
         email = _make_email("pw")
         user = create_user(
-            UserCreate(email=email, password=password, role="user")
+            UserCreate(email=email, password=password)
         )
         return email, password, user
     return _create

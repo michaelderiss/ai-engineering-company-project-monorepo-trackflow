@@ -10,11 +10,12 @@ from services.api.database import (
     update_profile_for_user,
 )
 from services.api.models import Profile, ProfileCreate, Role, User
+from services.api.response_schemas import ProfileResponse
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 
-@router.post("", response_model=Profile, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ProfileResponse, status_code=status.HTTP_201_CREATED)
 def create_profile(
     payload: ProfileCreate,
     current_user: User = Depends(get_current_user),
@@ -25,7 +26,7 @@ def create_profile(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user already has a profile.") from exc
 
 
-@router.get("", response_model=list[Profile])
+@router.get("", response_model=list[ProfileResponse])
 def list_profiles(current_user: User = Depends(get_current_user)) -> list[Profile]:
     if current_user.role != Role.ADMIN:
         raise HTTPException(
@@ -35,7 +36,7 @@ def list_profiles(current_user: User = Depends(get_current_user)) -> list[Profil
     return []
 
 
-@router.get("/me", response_model=Profile)
+@router.get("/me", response_model=ProfileResponse)
 def my_profile(current_user: User = Depends(get_current_user)) -> Profile:
     profile = get_profile_for_user(current_user.id)
     if profile is None:
@@ -43,7 +44,7 @@ def my_profile(current_user: User = Depends(get_current_user)) -> Profile:
     return profile
 
 
-@router.patch("/me", response_model=Profile)
+@router.patch("/me", response_model=ProfileResponse)
 def patch_my_profile(
     payload: ProfileCreate,
     current_user: User = Depends(get_current_user),
@@ -62,7 +63,7 @@ def patch_my_profile(
     return updated
 
 
-@router.get("/{profile_id}", response_model=Profile)
+@router.get("/{profile_id}", response_model=ProfileResponse)
 def get_profile_by_id(
     profile_id: int,
     current_user: User = Depends(get_current_user),
@@ -78,7 +79,7 @@ def get_profile_by_id(
     return profile
 
 
-@router.patch("/{profile_id}", response_model=Profile)
+@router.patch("/{profile_id}", response_model=ProfileResponse)
 def patch_profile(
     profile_id: int,
     payload: ProfileCreate,

@@ -29,16 +29,16 @@ def test_user_and_login_flow():
         json={
             "email": email,
             "password": password,
-            "role": "manager",
             "profile": {"display_name": "Alex Manager", "phone": "555-1000", "address": "Los Angeles"},
         },
     )
     assert response.status_code == 201, response.text
     payload = response.json()
-    assert payload["email"] == email
-    assert payload["hashed_password"] != password
-    assert payload["role"] == "manager"
-    assert payload["profile"]["display_name"] == "Alex Manager"
+    assert "email" not in payload
+    assert "hashed_password" not in payload
+    assert "password" not in payload
+    assert payload["role"] == "user"
+    assert "profile" not in payload
 
     login = client.post(
         "/auth/login",
@@ -50,7 +50,7 @@ def test_user_and_login_flow():
 
     protected = client.get(f"/users/{payload['id']}", headers={"Authorization": f"Bearer {token}"})
     assert protected.status_code == 200, protected.text
-    assert protected.json()["email"] == email
+    assert "email" not in protected.json()
 
     other_email = _make_email("other")
     other_user = client.post(
@@ -58,7 +58,6 @@ def test_user_and_login_flow():
         json={
             "email": other_email,
             "password": "OtherPass123!",
-            "role": "user",
         },
     )
     assert other_user.status_code == 201, other_user.text

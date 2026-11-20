@@ -38,6 +38,7 @@ services:
       - .env
     environment:
       - UVICORN_RELOAD=false
+      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-false}
       # CORS: comma-separated list of allowed origins for the browser.
       # Set CORS_ORIGINS in .env for production domains.
       - CORS_ORIGINS=${CORS_ORIGINS:-}
@@ -60,6 +61,7 @@ services:
       - BACKOFFICE_PORT=${BACKOFFICE_PORT:-3001}
       # Server-side proxy upstream — Docker service name `api`.
       - BACKEND_UPSTREAM=${BACKEND_UPSTREAM:-http://api:8000}
+      - NEXT_PUBLIC_TELEMETRY_ENABLED=${NEXT_PUBLIC_TELEMETRY_ENABLED:-${TELEMETRY_ENABLED:-false}}
       - NEXT_PUBLIC_INCIDENTS_API_BASE_URL=${NEXT_PUBLIC_INCIDENTS_API_BASE_URL:-}
       - NEXT_PUBLIC_INVENTORY_API_URL=${NEXT_PUBLIC_INVENTORY_API_URL:-}
     restart: always

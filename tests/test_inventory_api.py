@@ -20,13 +20,13 @@ def test_seeded_inventory_has_briefing_records_and_computed_stock(client):
 
     assert response.status_code == 200
     products = response.json()
-    assert len(products) == len(SKU_SEED) == 6
-    assert len(ENTRY_SEED) == 4
-    assert len(EXIT_SEED) == 3
+    assert len(products) == len(SKU_SEED) == 10
+    assert len(ENTRY_SEED) == 18
+    assert len(EXIT_SEED) == 26
     sneaker_la = next(item for item in products if item["sku"] == "CLT-SNK-W-42")
     sneaker_zgz = next(item for item in products if item["sku"] == "CLT-SNK-W-42-Z")
-    assert (sneaker_la["warehouse"], sneaker_la["current_stock"]) == ("LA", 25)
-    assert (sneaker_zgz["warehouse"], sneaker_zgz["current_stock"]) == ("ZGZ", 14)
+    assert (sneaker_la["warehouse"], sneaker_la["current_stock"]) == ("LA", 15)
+    assert (sneaker_zgz["warehouse"], sneaker_zgz["current_stock"]) == ("ZGZ", 3)
     assert all("current_stock" in item for item in products)
 
 
@@ -44,7 +44,7 @@ def test_get_product_returns_stock_for_its_warehouse(client):
     response = client.get(f"/inventory/products/{product['id']}")
 
     assert response.status_code == 200
-    assert response.json()["current_stock"] == 11
+    assert response.json()["current_stock"] == 12
     assert response.json()["warehouse"] == "LA"
 
 
@@ -125,8 +125,8 @@ def test_stock_movement_writes_require_authentication(client):
     assert outbound.status_code == 401
 
 
-def test_inbound_order_increases_computed_stock_and_records_user(client, auth_headers):
-    headers, account = auth_headers
+def test_inbound_order_increases_computed_stock_without_exposing_creator_id(client, auth_headers):
+    headers, _account = auth_headers
     product = _sku_by_code(client, "TEC-EAR-001")
     response = client.post(
         "/inventory/orders/inbound",
@@ -140,8 +140,8 @@ def test_inbound_order_increases_computed_stock_and_records_user(client, auth_he
     )
 
     assert response.status_code == 201
-    assert response.json()["user_uuid"] == str(account["user"]["id"])
-    assert _sku_by_code(client, "TEC-EAR-001")["current_stock"] == 16
+    assert "user_uuid" not in response.json()
+    assert _sku_by_code(client, "TEC-EAR-001")["current_stock"] == 17
 
 
 def test_inbound_order_rejects_a_different_sku_warehouse(client, auth_headers):
@@ -237,7 +237,7 @@ def test_valid_loss_decreases_stock_without_tracking_number(client, auth_headers
 
     assert response.status_code == 201
     assert response.json()["tracking_number"] is None
-    assert _sku_by_code(client, "CLT-SNK-W-42-Z")["current_stock"] == 13
+    assert _sku_by_code(client, "CLT-SNK-W-42-Z")["current_stock"] == 2
 
 
 def test_movement_foreign_keys_are_enforced_by_database(client):
@@ -281,8 +281,8 @@ def test_valid_outbound_and_orders_list_include_sku_details(client, auth_headers
     )
 
     assert response.status_code == 201
-    assert response.json()["user_uuid"] == str(account["user"]["id"])
-    assert _sku_by_code(client, "TEC-EAR-001")["current_stock"] == 9
+    assert "user_uuid" not in response.json()
+    assert _sku_by_code(client, "TEC-EAR-001")["current_stock"] == 10
 
     orders = client.get("/inventory/orders")
     assert orders.status_code == 200
@@ -292,3 +292,4 @@ def test_valid_outbound_and_orders_list_include_sku_details(client, auth_headers
     assert created["order_type"] == "outbound"
     assert created["sku"]["sku"] == "TEC-EAR-001"
     assert created["warehouse"] == "LA"
+    assert "user_uuid" not in created

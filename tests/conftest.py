@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from services.api import auth as auth_module
 from services.api import database as database_module
+from services.api import telemetry as telemetry_module
 from services.api.main import app
 from services.api.models import UserCreate
 
@@ -31,6 +32,8 @@ def isolated_storage(tmp_path, monkeypatch):
     """
     monkeypatch.setattr(database_module, "USER_DB_PATH", tmp_path / "users.json")
     monkeypatch.setattr(database_module, "DB_PATH", tmp_path / "suppliers.json")
+    monkeypatch.setattr(telemetry_module, "persist_events", lambda events: len(events))
+    telemetry_module.clear_report_cache()
     from services.api import incidents as incidents_module
 
     monkeypatch.setattr(incidents_module, "DB_PATH", tmp_path / "incidents.sqlite3")
@@ -41,6 +44,7 @@ def isolated_storage(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(inventory_database_module, "engine", inventory_engine)
     yield
+    telemetry_module.clear_report_cache()
     inventory_engine.dispose()
 
 
@@ -105,11 +109,25 @@ def frozen_now():
     frozen.stop()
 
 
+def _promote_user(user_id: int, role: Role) -> None:
+    """Promote a freshly created user to the given role via the database layer.
+    Used by admin_account / manager_account fixtures since UserCreate no longer
+    accepts a role field.
+    """
+    from services.api.database import update_user
+    from services.api.models import UserUpdate
+
+    update_user(user_id, UserUpdate(role=role))
+
+
 @pytest.fixture
 def admin_account(client, make_email):
     """A manager/admin-level user used to exercise backoffice access control."""
+    from services.api.models import Role
+
     email = make_email("admin")
-    user = register_user(client, email, "AdminPass123!", role="admin")
+    user = register_user(client, email, "AdminPass123!")
+    _promote_user(user["id"], Role.ADMIN)
     response = client.post(
         "/auth/login", data={"username": email, "password": "AdminPass123!"}
     )
@@ -124,8 +142,11 @@ def admin_account(client, make_email):
 
 @pytest.fixture
 def manager_account(client, make_email):
+    from services.api.models import Role
+
     email = make_email("manager")
-    user = register_user(client, email, "ManagerPass123!", role="manager")
+    user = register_user(client, email, "ManagerPass123!")
+    _promote_user(user["id"], Role.MANAGER)
     response = client.post(
         "/auth/login", data={"username": email, "password": "ManagerPass123!"}
     )

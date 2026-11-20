@@ -6,6 +6,12 @@ The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` 
 
 Reset links and recipient addresses are not printed by default. For local development only, explicitly set `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in the root `.env` to print a usable reset link when Resend is unavailable. Restart the API after changing the setting. Never enable this in production or shared logs; console links are credentials. Real email still requires a valid Resend key and sender.
 
+## Telemetry Event Storage
+
+Telemetry uses `TELEMETRY_DATABASE_URL`, separate from inventory's `DATABASE_URL`. Apply `services/telemetry/schema.sql` to the Supabase project to create the event table and indexes. The service exposes `POST /api/telemetry/events`; it validates each event independently and returns `received`, `stored`, and `rejected` counts. API timing and successful or rejected supplier mutations are emitted from the FastAPI service without changing either frontend.
+
+`GET /telemetry/report` (also available at `/api/telemetry/report`) is restricted to managers and admins. It loads a bounded UTC-window result from Supabase into Pandas, normalizes/refines the rows, then groups event volume, API failures, and mean/p95 route latency. The normalized start/end window is cached for 60 seconds (up to 128 windows). These metrics answer whether telemetry volume is changing, whether API failures are rising, and which route has slow responses. The report does not include a separate authentication-success metric or a visual dashboard.
+
 Run the API from the repository root with:
 
 ```powershell
@@ -13,6 +19,12 @@ uvicorn services.api.main:app --reload
 ```
 
 The forgot-password endpoint always returns the same confirmation for known and unknown email addresses. Email delivery errors are logged server-side without exposing whether an account exists. Reset tokens are signed, expire at the configured interval, and are recorded as used after a successful password update.
+
+## Telemetry Capture (Part 2)
+
+`POST /api/telemetry/events` is a validation-only stub. It accepts a JSON batch of up to 20 schema-valid events (64 KiB maximum), returns HTTP 200 with `{"accepted": <count>}`, and neither persists nor logs event contents. Set `TELEMETRY_ENABLED=false` to disable the route.
+
+The backoffice endpoint is configurable with `NEXT_PUBLIC_TELEMETRY_ENDPOINT` and defaults to `/api/telemetry/events`. Capture includes safe page views, login success/failure, product-list views, API latency, sanitized frontend errors, and Web Vitals. Inbound receipts and customer dispatches emit their mandatory events only after a successful API response; the four seeded clients use the explicit stable mapping in the backoffice telemetry service. Threshold, direct-edit-rejection, and physical-discrepancy events remain unavailable until their workflows exist.
 
 ## Inventory Management (Milestone 5)
 

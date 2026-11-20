@@ -36,7 +36,6 @@ class TestLoginEndpoint:
 
     def test_login_works_for_user_with_profile(self, client, create_user):
         account = create_user(
-            role="manager",
             profile={"display_name": "Alex Manager", "phone": "555-1000", "address": "Los Angeles"},
         )
         response = client.post(

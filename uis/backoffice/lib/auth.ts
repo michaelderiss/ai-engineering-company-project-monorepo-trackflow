@@ -3,6 +3,15 @@ export { RequestError, isObject } from "../../../packages/shared/http";
 
 const AUTH_TOKEN_KEY = "trackflow_access_token";
 
+function clearTelemetryIdentity(): void {
+  try {
+    sessionStorage.removeItem("trackflow_telemetry_session");
+    sessionStorage.removeItem("trackflow_telemetry_user");
+  } catch {
+    // Telemetry is best-effort; authentication state remains authoritative.
+  }
+}
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_INCIDENTS_API_BASE_URL ?? "";
 
@@ -17,6 +26,7 @@ export function getToken(): string | null {
 export function setToken(token: string): void {
   try {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
+    clearTelemetryIdentity();
   } catch {
     throw new Error("Your browser could not save the session. Allow site storage and try signing in again.");
   }
@@ -25,6 +35,7 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   try {
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    clearTelemetryIdentity();
   } catch {
     // localStorage unavailable — ignore
   }
@@ -73,4 +84,4 @@ export async function apiResponse(path: string, options: RequestInit = {}): Prom
 
 export function publicApiFetch<T>(path: string, options: RequestInit = {}, validate?: (value: unknown) => boolean): Promise<T> {
   return requestJson<T>(`${API_BASE}${path}`, options, validate);
-}
+}

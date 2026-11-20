@@ -214,8 +214,8 @@ def create_user(payload: UserCreate) -> User:
         user_document = {
             "email": payload.email,
             "hashed_password": get_password_hash(payload.password),
-            "is_active": payload.is_active,
-            "role": payload.role.value,
+            "is_active": getattr(payload, "is_active", True),
+            "role": getattr(payload, "role", Role.USER).value,
             "created_at": created_at,
             "updated_at": created_at,
         }

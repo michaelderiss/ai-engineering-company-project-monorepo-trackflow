@@ -95,7 +95,7 @@ export default function OutboundOrderPage() {
         exit_type: exitType,
         tracking_number: exitType === "dispatch" ? trackingNumber.trim() : null,
         warehouse: selectedProduct.warehouse,
-      });
+      }, selectedProduct);
       setSuccess(`Exit #${created.id} recorded for ${selectedProduct.name}.`);
       setQuantity("");
       setTrackingNumber("");

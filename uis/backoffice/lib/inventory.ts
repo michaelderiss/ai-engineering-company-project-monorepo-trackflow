@@ -5,6 +5,7 @@ import {
   getToken,
   redirectToLogin,
 } from "./auth";
+import { trackInventoryOrderCreated, trackTelemetry } from "./telemetry";
 
 export type Warehouse = "LA" | "ZGZ";
 export type InventoryCategory = "fashion" | "electronics" | "cosmetics";
@@ -132,11 +133,14 @@ async function inventoryRequest<T>(
 }
 
 export function getInventoryProducts(): Promise<InventoryProduct[]> {
-  return inventoryRequest(
+  return inventoryRequest<InventoryProduct[]>(
     "/products",
     {},
     (value) => Array.isArray(value) && value.every(isProduct),
-  );
+  ).then((products) => {
+    trackTelemetry("inventory_products_viewed", { result_count: products.length });
+    return products;
+  });
 }
 
 export function getInventoryProduct(id: number): Promise<InventoryProduct> {
@@ -151,8 +155,8 @@ export function createInventoryProduct(payload: CreateProduct): Promise<Inventor
   );
 }
 
-export function createStockEntry(payload: CreateStockEntry): Promise<StockEntry> {
-  return inventoryRequest(
+export function createStockEntry(payload: CreateStockEntry, product?: InventoryProduct): Promise<StockEntry> {
+  return inventoryRequest<StockEntry>(
     "/orders/inbound",
     { method: "POST", body: JSON.stringify(payload) },
     (value) =>
@@ -164,11 +168,14 @@ export function createStockEntry(payload: CreateStockEntry): Promise<StockEntry>
       isWarehouse(value.warehouse) &&
       typeof value.created_at === "string" &&
       typeof value.user_uuid === "string",
-  );
+  ).then((entry) => {
+    if (product) trackInventoryOrderCreated("inbound_order_created", product, payload.quantity);
+    return entry;
+  });
 }
 
-export function createStockExit(payload: CreateStockExit): Promise<StockExit> {
-  return inventoryRequest(
+export function createStockExit(payload: CreateStockExit, product?: InventoryProduct): Promise<StockExit> {
+  return inventoryRequest<StockExit>(
     "/orders/outbound",
     { method: "POST", body: JSON.stringify(payload) },
     (value) =>
@@ -181,7 +188,12 @@ export function createStockExit(payload: CreateStockExit): Promise<StockExit> {
       isWarehouse(value.warehouse) &&
       typeof value.created_at === "string" &&
       typeof value.user_uuid === "string",
-  );
+  ).then((exit) => {
+    if (product && payload.exit_type === "dispatch") {
+      trackInventoryOrderCreated("outbound_order_created", product, payload.quantity);
+    }
+    return exit;
+  });
 }
 
 export function getInventoryOrders(): Promise<InventoryOrder[]> {

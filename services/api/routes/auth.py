@@ -23,6 +23,7 @@ from services.api.models import (
     Token,
     User,
 )
+from services.api.response_schemas import CurrentUserResponse, MessageResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -41,12 +42,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) -> Token:
     return await login_user(form_data)
 
 
-@router.get("/me", response_model=User)
+@router.get("/me", response_model=CurrentUserResponse)
 async def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@router.post("/forgot-password", response_model=MessageResponse, status_code=status.HTTP_200_OK)
 async def forgot_password(
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
@@ -62,7 +63,7 @@ async def forgot_password(
     }
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=MessageResponse)
 async def reset_password(payload: ResetPasswordRequest) -> dict[str, str]:
     if not reset_user_password(payload.token, payload.new_password):
         raise HTTPException(
@@ -72,7 +73,7 @@ async def reset_password(payload: ResetPasswordRequest) -> dict[str, str]:
     return {"message": "Password updated successfully."}
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     payload: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),

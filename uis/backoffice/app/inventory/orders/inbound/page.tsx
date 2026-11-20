@@ -57,7 +57,7 @@ export default function InboundOrderPage() {
         quantity: parsedQuantity,
         reference: reference.trim(),
         warehouse: selectedProduct.warehouse,
-      });
+      }, selectedProduct);
       setSuccess(`Receipt #${entry.id} recorded for ${selectedProduct.name}.`);
       setSkuId("");
       setQuantity("");
