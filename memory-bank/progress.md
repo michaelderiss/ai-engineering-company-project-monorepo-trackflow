@@ -234,6 +234,19 @@
 - Created `data/pipelines/PIPELINE_DESIGN.md` documenting the weekly warehouse & client performance pipeline.
 - Covers: Current State analysis (what telemetry captures, what the technical report answers, the business gap), Pipeline Purpose (named deliverable, KPIs from company-BRIEFING.md), Extraction format, 3-stage data flow (extract/transform/load), Destination table (`reporting.weekly_warehouse_client_performance`), idempotency strategy (upsert on unique constraint), execution log with 9 fields, Prefect mapping (1 flow, 4 tasks, configuration blocks), and 3 planned endpoints in `services/reporting/`.
 - Designs the pipeline to produce KPIs: Inbound Volume, Outbound Throughput, Stockout Frequency, Discrepancy Rate from mandatory telemetry events.
+
+## Milestone 6 — Part 2: Resilient Pipeline Implementation (Complete)
+
+- Created `data/pipelines/pipeline.py` with Prefect flow: extract_events, compute_kpis, load_reporting_rows tasks plus optional snapshot_eval.
+- Created `services/reporting/` module with:
+  - `__init__.py` — package marker
+  - `database.py` — schema management (CREATE SCHEMA/TABLES), upsert logic, pipeline run log, query helpers
+  - `routes.py` — 3 FastAPI endpoints: GET /reporting/pipeline-runs/latest, POST /reporting/pipeline-runs, GET /reporting/weekly-warehouse-client-performance
+- Resilience: extract_events has 3 retries/30s delay, load_reporting_rows has 2 retries/15s delay, snapshot_eval is optional with return_state=True, compute_kpis has cache_key_fn + 1-hour cache_expiration.
+- Idempotency: upsert via ON CONFLICT (warehouse, client_id, week_start) DO UPDATE.
+- Pipeline run log records start time, end time, records processed, status, errors (9 fields in reporting.pipeline_runs).
+- CLI entrypoint: `python data/pipelines/pipeline.py`.
+- No modifications to services/telemetry/analysis.py or GET /telemetry/report.
 - Added authenticated `POST /auth/change-password`, which verifies the current password before applying the new password and returns 400 for an incorrect current password.
 - Added persistent token records in TinyDB, storing a hash of each reset token ID and marking a record used when the password changes.
 - Added Resend integration in `services/api/email.py`; API key and sender are environment-only values. Root `.env.example`, `.gitignore` rules, `python-dotenv` loading, and `services/api/README.md` document local setup.

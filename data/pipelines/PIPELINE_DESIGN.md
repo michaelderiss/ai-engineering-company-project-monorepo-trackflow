@@ -434,6 +434,8 @@ Returns KPI rows for a given week (the feed for the Part 3 dashboard).
 python data/pipelines/pipeline.py
 ```
 
+The pipeline runs the full ETL flow when invoked directly as a script (``if __name__ == "__main__"`` block). It accepts no CLI arguments — the week defaults to the last completed ISO week. The ``trigger_pipeline_run(week_start)`` function can be called programmatically with a specific week.
+
 ## Scheduled Execution
 
 The pipeline is intended to run every **Monday at 01:00 UTC** (cron: `0 1 * * 1`), processing the completed ISO week. This can be configured as a Prefect schedule or a cron job that executes `python data/pipelines/pipeline.py`.
