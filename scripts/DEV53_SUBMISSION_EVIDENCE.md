@@ -44,6 +44,6 @@ CSV rows contain telemetry identifiers and properties; review/redact them if rep
 ## Tests
 
 ```text
-Full suite: 210 passed (captured before the additional blocked-path test was added)
-Focused worker suite after that test was added: 7 passed
+Full suite after the blocked-path test was added: 211 passed, 175 warnings (156.40 seconds)
+Focused worker suite: 7 passed
 ```
