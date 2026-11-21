@@ -18,6 +18,7 @@ It does NOT modify services/telemetry/analysis.py or the GET /telemetry/report e
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -121,7 +122,7 @@ def extract_events(week_start: str) -> pd.DataFrame:
     30-second gaps cover common transient failures within a ~2-minute window
     without blocking the pipeline for too long.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     run_logger.info("Extracting events for week starting %s", week_start)
 
     week_end = (
@@ -269,7 +270,7 @@ def compute_kpis(events_df: pd.DataFrame) -> list[dict[str, Any]]:
     layer always re-reads from the database, so any new events are picked up on
     the next cache miss. One hour matches the typical delay between re-runs.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     run_logger.info("Starting KPI computation on %d events", len(events_df))
     result = compute_kpis_logic(events_df)
     run_logger.info("Computed %d KPI rows", len(result))
@@ -286,7 +287,7 @@ def load_reporting_rows(kpi_rows: list[dict[str, Any]]) -> int:
     the upsert is idempotent -- partial writes from a failed attempt are
     overwritten on retry.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     if not kpi_rows:
         run_logger.info("No KPI rows to load -- skipping")
         return 0
@@ -303,7 +304,7 @@ def snapshot_eval(kpi_rows: list[dict[str, Any]], week_start: str) -> str | None
     This is an optional/non-critical step. A failure here must not block
     the main pipeline execution.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     if not kpi_rows:
         run_logger.info("No KPI rows to snapshot -- skipping")
         return None
@@ -345,7 +346,7 @@ def extraction_subflow(week_start: str) -> pd.DataFrame:
     extract task. It can be executed independently for debugging or
     ad-hoc extraction.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     run_logger.info("Extraction subflow: week_start=%s", week_start)
 
     # Ensure the reporting schema exists before proceeding
@@ -366,7 +367,7 @@ def transformation_subflow(events_df: pd.DataFrame) -> list[dict[str, Any]]:
     This subflow wraps the compute_kpis task with caching. It can be
     executed independently with in-memory fixtures for testing.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     run_logger.info("Transformation subflow: %d events received", len(events_df))
 
     kpi_rows = compute_kpis(events_df)
@@ -386,23 +387,20 @@ def load_subflow(kpi_rows: list[dict[str, Any]], week_start: str) -> dict[str, A
 
     Returns a dict with ``records_loaded`` and ``snapshot_saved`` keys.
     """
-    run_logger = get_run_logger(__name__)
+    run_logger = get_run_logger()
     run_logger.info("Load subflow: %d KPI rows, week=%s", len(kpi_rows), week_start)
 
     # Stage 3a: Idempotent upsert
     records_loaded = load_reporting_rows(kpi_rows)
 
     # Stage 3b: Optional snapshot (non-critical)
-    snapshot_result = snapshot_eval.with_options(return_state=True)(
-        kpi_rows, week_start
-    )
-    snapshot_saved = (
-        snapshot_result.result.is_completed()
-        if hasattr(snapshot_result, "result")
-        and hasattr(snapshot_result.result, "is_completed")
-        and snapshot_result.result.is_completed()
-        else False
-    )
+    try:
+        snapshot_path = snapshot_eval(kpi_rows, week_start)
+        snapshot_saved = snapshot_path is not None
+    except Exception as exc:
+        # Snapshot generation is best-effort and must not fail the ETL load.
+        run_logger.warning("Optional KPI snapshot failed: %s", exc)
+        snapshot_saved = False
 
     return {
         "records_loaded": records_loaded,
@@ -521,12 +519,20 @@ def get_latest_pipeline_run() -> dict[str, Any] | None:
 # Schedule: Monday 01:00 UTC (cron: ``0 1 * * 1``)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the weekly telemetry KPI pipeline.")
+    parser.add_argument(
+        "--week-start",
+        metavar="YYYY-MM-DD",
+        help="Monday starting the ISO week to process (defaults to last completed week).",
+    )
+    args = parser.parse_args()
+
     # Configure basic logging for CLI use
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    result = weekly_warehouse_client_performance_flow()
+    result = weekly_warehouse_client_performance_flow(week_start=args.week_start)
     print(f"\nPipeline result: {json.dumps(result, indent=2, default=str)}")
     if result.get("status") == "failed":
         sys.exit(1)
