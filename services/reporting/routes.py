@@ -10,13 +10,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from services.reporting.database import query_reporting_kpis as _query_kpis
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reporting", tags=["reporting"])
+tasks_router = APIRouter(tags=["tasks"])
 
 
 @router.get("/pipeline-runs/latest")
@@ -35,22 +36,41 @@ def get_latest_run() -> dict[str, Any]:
     return result
 
 
-@router.post("/pipeline-runs")
-def trigger_manual_run(week_start: str | None = None) -> dict[str, Any]:
-    """Trigger a manual pipeline run for the given ISO week.
+@router.post("/pipeline-runs", status_code=status.HTTP_202_ACCEPTED)
+def trigger_manual_run(week_start: str | None = Query(default=None)) -> dict[str, str]:
+    """Enqueue a manual pipeline run and return without executing the pipeline.
 
-    If ``week_start`` is omitted, the pipeline runs for the last completed
-    ISO week. Returns the run summary with status.
+    If ``week_start`` is omitted, the worker selects the last completed ISO week.
     """
-    from data.pipelines.pipeline import trigger_pipeline_run as _trigger_run
+    from services.reporting.tasks import run_reporting_pipeline
 
-    result = _trigger_run(week_start=week_start)
-    if result.get("status") == "failed":
-        raise HTTPException(
-            status_code=500,
-            detail=f"Pipeline run failed: {result.get('error', 'Unknown error')}",
-        )
-    return result
+    queued = run_reporting_pipeline.delay(week_start=week_start)
+    logger.info("task_id=%s status=pending operation=reporting_pipeline", queued.id)
+    return {"task_id": queued.id}
+
+
+@tasks_router.get("/tasks/{task_id}")
+def get_task_status(task_id: str) -> dict[str, Any]:
+    """Return the current Celery status and result, if available."""
+    from celery.result import AsyncResult
+
+    from services.celery_app import celery_app
+
+    result = AsyncResult(task_id, app=celery_app)
+    state = {
+        "PENDING": "pending",
+        "RECEIVED": "started",
+        "STARTED": "started",
+        "RETRY": "pending",
+        "SUCCESS": "success",
+        "FAILURE": "failure",
+    }.get(result.state, "pending")
+    response: dict[str, Any] = {"task_id": task_id, "status": state}
+    if result.successful():
+        response["result"] = result.result
+    elif result.failed():
+        response["result"] = {"error": str(result.result)}
+    return response
 
 
 @router.get("/weekly-warehouse-client-performance")

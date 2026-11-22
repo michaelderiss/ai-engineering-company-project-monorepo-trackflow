@@ -1,5 +1,22 @@
 # Progress
 
+## DEV-55 — Async reporting task queue
+
+- Converted `POST /reporting/pipeline-runs` from synchronous ETL execution to an immediate HTTP 202 enqueue response; `GET /tasks/{task_id}` returns Celery lifecycle state and includes result/error only when terminal.
+- Added Redis 7 with AOF persistence and `noeviction`, a separately running Celery worker, and Flower on port 5555 to Compose. API, worker, and Flower use the shared `REDIS_URL`.
+- The worker runs the weekly warehouse/client reporting pipeline using only an optional ISO week date in the task message. It applies a 15-minute hard timeout and late acknowledgements, logs task ID/attempt/status/duration, and retries failures with 2/4/8-second backoff. Final failure is persisted to `reporting.task_dead_letters` and sent to the unconsumed `dead_letter` queue.
+- Added route/status and DLQ focused tests and README operation instructions. For an actual DB-backed reporting run, configure `TELEMETRY_DATABASE_URL` for the shared PostgreSQL database; `.env.docker`'s blank value is not enough for executing the pipeline or persisting DLQ rows.
+- Outstanding submission evidence: verify the stack against a configured broker/database, capture Flower showing success and a terminal DLQ task, and record a retry log snippet. Push this branch, open the PR, include the endpoint justification/evidence, and apply the `async-tasks` label.
+
+## DEV-53 — Nightly telemetry export worker
+
+- Added standalone `scripts/nightly_export.py`, resolving yesterday in UTC or `TARGET_DATE`, writing a per-day CSV audit backup without replacing existing files, then invoking the current Milestone 6 `data.pipelines.pipeline` module in a checked subprocess. It does not import or run FastAPI.
+- Added `services/job_runner.py` and `services/telemetry/job_runs.sql`: pending → processing → completed/failed lifecycle, per-date idempotency, timestamps/error details, and a PostgreSQL partial unique processing index as the sole distributed lock. `reporting.pipeline_runs` remains separate for ETL execution records.
+- Added focused lifecycle/export/date tests and `scripts/NIGHTLY_EXPORT.md` with SQL setup and host crontab implementation. Recommended production expression: `15 2 * * *` with `CRON_TZ=UTC`; the repository documents the trigger rather than changing a machine's crontab.
+- The worker passes the target day's ISO-week Monday to the existing weekly ETL via `--week-start`. Local CLI loads ignored `.env.worker` without overriding exported environment. Prefect runtime validation exposed incompatible logger and optional snapshot calls; updated them to supported Prefect 2 APIs and made the snapshot truly best-effort.
+- End-to-end worker validation completed for 2026-11-10: CSV contains 20 rows; job record and pipeline run are completed; processing lock count is zero. The weekly ETL extracted 0 eligible business-KPI events because those telemetry rows are API/UI activity, not the pipeline's four supported inventory KPI event types.
+- Full test suite: 210 passed. The crontab has not been installed on this Windows machine; production deployment still needs an operator to configure it on the Linux worker host.
+
 ## Telemetry Event Storage
 
 - Added an idempotent Supabase schema at `services/telemetry/schema.sql` and a
