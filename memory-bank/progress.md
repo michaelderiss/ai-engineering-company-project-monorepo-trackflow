@@ -199,6 +199,18 @@
 - Note: the full backend run emits many benign deprecation warnings (Python
   3.15 beta + FastAPI/starlette/httpx); they do not affect results.
 
+## SF-M6 — Sales Forecast Model (Milestone 6)
+
+- **Algorithm**: Random Forest Regressor (scikit-learn) — chosen over XGBoost for explainability, small training set (84 months), and feasibility-assessment scope
+- **Data**: 10-year consolidated monthly revenue CSV (`data/raw/trackflow_sales.csv`, 2016-01 to 2025-12), sourced from SFContext.md
+- **Feature engineering**: Cyclic month encoding (sin/cos), peak/low season flags, year index, causal lags (t-1,2,3,12), rolling means (3/6/12-month), YoY growth rate — all with no future leakage
+- **Split**: 8 years training (2017-2023, 84 months after lags) / 2 years test (2024-2025, 24 months)
+- **Metrics** (test set): MSE = €13.7B, RMSE = €117K (9.01%), PSI = 0.7874, Gini = 0.7361, K2 Score = 0.2500
+- **Visualization**: `scripts/sales_forecast.png` — line plot with 95% prediction interval
+- **Tests**: 6 unit tests in `tests/pipelines/test_sales_forecast_split.py` all passing
+- **Random seed**: fixed at 42 for reproducibility
+- **Status**: Branch pushed to fork, PR opened against main. Awaiting tech lead review.
+
 ## Completed (previous milestones)
 
 - Added script-first incident analyzer with context-aligned metrics.
