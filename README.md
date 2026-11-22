@@ -89,11 +89,14 @@ docker compose up --build
 #    API health:     http://localhost:8000/health
 ```
 
-Two services start:
-| Service | Container      | Ports | Tech              | Hot reload |
-|---------|----------------|-------|--------------------|------------|
-| API     | `trackflow-api`| 8000  | FastAPI + uvicorn  | ✅ `--reload` |
-| UI      | `trackflow-ui` | 3000, 3001 | Next.js 15 + 16 (both apps in ONE container) | ✅ `next dev` |
+The API, independent Celery worker, Redis broker, Flower monitor, and UI start:
+| Service | Container | Ports | Purpose |
+|---------|-----------|-------|---------|
+| API | `trackflow-api` | 8000 | FastAPI producer |
+| Worker | `trackflow-celery-worker` | — | Independent Celery consumer |
+| Redis | `trackflow-redis` | 6379 | Broker and result backend (`noeviction`) |
+| Flower | `trackflow-flower` | 5555 | Queue/task monitoring at http://localhost:5555 |
+| UI | `trackflow-ui` | 3000, 3001 | Website and backoffice |
 
 The **UI** container runs both Next.js applications — the public website
 (`:3000`) and the admin backoffice (`:3001`) — from a single image via
@@ -135,6 +138,30 @@ The production overlay:
 - Sets `TRACKFLOW_UI_MODE=prod` so `uis/start.sh` runs `npm run build && npm run start`
 - Uses `restart: always` for resilience
 - Disables uvicorn `--reload`
+
+### Async reporting tasks (DEV-55)
+
+`POST /reporting/pipeline-runs` enqueues a weekly reporting pipeline run and immediately returns HTTP 202 with `{"task_id":"..."}`. The Celery worker executes the ETL independently of FastAPI. Poll `GET /tasks/{task_id}` for `pending`, `started`, `success`, or `failure` and the result when available. The task message contains only the optional ISO week date; telemetry records remain in the database.
+
+The worker uses late acknowledgements, a 15-minute hard timeout, and three automatic retries with exponential delays (2, 4, and 8 seconds). After the retries are exhausted, the task is placed on the dedicated `dead_letter` Redis queue and `reporting.task_dead_letters` stores the Celery task ID, terminal attempt number, error message, and timestamp. The `dead_letter` queue is intentionally not consumed by the normal worker, so quarantined messages remain inspectable in Redis/Flower and cannot trigger another pipeline run. Redis is configured with AOF persistence and `noeviction`; API, worker, and Flower use the same `REDIS_URL` (Compose default `redis://redis:6379/0`).
+
+```bash
+# Start all services, including independent worker and Flower
+cp .env.docker .env   # if not already configured
+docker compose up --build
+
+# Worker only, if starting it outside Compose (in another terminal).
+# Point to the host-published Redis port; also configure TELEMETRY_DATABASE_URL.
+$env:REDIS_URL = "redis://localhost:6379/0"  # PowerShell
+uv run celery -A services.celery_app:celery_app worker --loglevel=INFO
+# On macOS/Linux, use: export REDIS_URL=redis://localhost:6379/0
+
+# Stop the Compose worker, or stop the standalone worker with Ctrl+C
+docker compose stop worker
+# Flower: http://localhost:5555
+```
+
+The database account used by the worker must be able to create/use the `reporting` schema and tables. Configure `TELEMETRY_DATABASE_URL` for the shared PostgreSQL database in `.env`; never commit credentials.
 
 ### Architecture
 

@@ -46,6 +46,12 @@ const APP_OPTIONS: AppOption[] = [
     description: "Open the hiring tracker route.",
     path: "/talent-pipeline-tracker",
   },
+    {
+      id: "reporting",
+      label: "Business Performance Dashboard",
+      description: "Weekly warehouse and client KPIs computed from telemetry data.",
+      path: "/reporting",
+    },
 ];
 
 export default function Page() {
