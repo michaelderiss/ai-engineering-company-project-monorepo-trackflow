@@ -39,6 +39,7 @@ from services.api.routes.inventory import router as inventory_router  # noqa: E4
 from services.api import telemetry as telemetry_module  # noqa: E402
 from services.api.telemetry import report_router as telemetry_report_router  # noqa: E402
 from services.api.telemetry import router as telemetry_router  # noqa: E402
+from services.reporting.routes import router as reporting_router, tasks_router  # noqa: E402
 
 app = FastAPI(title="TrackFlow API", version="1.1.0")
 timing_logger = logging.getLogger("api.timing")
@@ -129,6 +130,8 @@ app.include_router(suppliers_router)
 app.include_router(inventory_router)
 app.include_router(telemetry_router)
 app.include_router(telemetry_report_router)
+app.include_router(reporting_router)
+app.include_router(tasks_router)
 
 
 @app.get("/health")
