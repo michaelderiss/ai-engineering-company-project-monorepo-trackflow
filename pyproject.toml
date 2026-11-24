@@ -21,6 +21,8 @@ dependencies = [
   "celery[redis]==5.4.0",
   "flower==2.0.1",
   "packaging>=23.0",
+  "scikit-learn>=1.9.1",
+  "matplotlib>=3.11.2",
 ]
 
 [project.scripts]

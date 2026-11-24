@@ -350,3 +350,9 @@ This is the current working baseline to preserve before additional feature work 
 - Created `uis/backoffice/app/reporting/page.tsx` — Business Performance Dashboard with pipeline status and 5 KPI cards per warehouse/client.
 - Added Reporting Dashboard link to home page application launcher.
 - Committed and pushed to `origin/M6Pipelines`. Pull request created.
+
+## ETM — regression model evaluation
+
+- Reworked `scripts/train_sales_forecast.py` to evaluate the existing consolidated monthly sales Random Forest with a fixed 2016-2023 / 2024-2025 boundary, causal lag and rolling features, five expanding-window temporal CV folds, and a forward-chaining learning curve.
+- Evaluation outputs are written to `data/eval/`: `evaluation_report.md`, `sales_learning_curve.png`, `sales_forecast_evaluation.png`, and machine-readable metrics/learning-curve tables. The report classifies the observed fit and recommends a specific regularization trial based on the train/validation gap. Country-mix PSI is explicitly N/A because this consolidated-only CSV has no US/Spain breakdown.
+- Added split and fold-order/causal-boundary checks in `tests/pipelines/test_sales_forecast_temporal_cv.py`; focused evaluation tests passed in a temporary Python 3.13 environment (9 passed). The repository `.venv` could not be used because its `lib64` link is inaccessible, so the temporary environment was used for validation.
