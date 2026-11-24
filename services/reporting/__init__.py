@@ -1,0 +1,1 @@
+"""Reporting module — business-facing pipeline output, separate from services/telemetry/."""

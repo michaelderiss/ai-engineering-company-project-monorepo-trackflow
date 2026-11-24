@@ -34,6 +34,24 @@ name: trackflow
 
 services:
 
+  # Redis broker/result backend shared by the API producer and workers.
+  redis:
+    image: redis:7-alpine
+    container_name: trackflow-redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - trackflow-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - trackflow
+    restart: unless-stopped
+
   # ------------------------------------------------------------------
   # FastAPI backend — TrackFlow API (:8000)
   # ------------------------------------------------------------------
@@ -49,6 +67,7 @@ services:
     environment:
       - UVICORN_RELOAD=${UVICORN_RELOAD:-false}
       - TELEMETRY_ENABLED=${TELEMETRY_ENABLED:-true}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     # Production-oriented default: the image is self-contained (no bind
     # mount). The dev override (docker-compose.override.yml) adds the
     # bind mount + --reload.
@@ -69,6 +88,45 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: trackflow-celery-worker
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+    command: ["celery", "-A", "services.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=2", "-Q", "celery"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - trackflow
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+    container_name: trackflow-flower
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+    command: ["celery", "-A", "services.celery_app:celery_app", "flower", "--address=0.0.0.0", "--port=5555"]
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - trackflow
     restart: unless-stopped
@@ -113,6 +171,7 @@ services:
 
 volumes:
   trackflow-api-data:
+  trackflow-redis-data:
 
 networks:
   trackflow:

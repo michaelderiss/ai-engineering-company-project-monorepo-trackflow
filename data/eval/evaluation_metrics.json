@@ -1,0 +1,76 @@
+{
+  "cross_validation": [
+    {
+      "fold": 1,
+      "train_observations": 24,
+      "train_start": "2017-01",
+      "train_end": "2018-12",
+      "validation_start": "2019-01",
+      "validation_end": "2019-12",
+      "train_mae_eur": 17126.699158579326,
+      "train_rmse_eur": 25164.901232033964,
+      "validation_mae_eur": 71232.93861699135,
+      "validation_rmse_eur": 89400.70768624394
+    },
+    {
+      "fold": 2,
+      "train_observations": 36,
+      "train_start": "2017-01",
+      "train_end": "2019-12",
+      "validation_start": "2020-01",
+      "validation_end": "2020-12",
+      "train_mae_eur": 18075.02885496653,
+      "train_rmse_eur": 29388.052470233164,
+      "validation_mae_eur": 49507.0326239628,
+      "validation_rmse_eur": 65228.02023319115
+    },
+    {
+      "fold": 3,
+      "train_observations": 48,
+      "train_start": "2017-01",
+      "train_end": "2020-12",
+      "validation_start": "2021-01",
+      "validation_end": "2021-12",
+      "train_mae_eur": 16782.91928052522,
+      "train_rmse_eur": 22960.329646380083,
+      "validation_mae_eur": 63795.428589078925,
+      "validation_rmse_eur": 84053.92534001207
+    },
+    {
+      "fold": 4,
+      "train_observations": 60,
+      "train_start": "2017-01",
+      "train_end": "2021-12",
+      "validation_start": "2022-01",
+      "validation_end": "2022-12",
+      "train_mae_eur": 15834.633041444025,
+      "train_rmse_eur": 22620.718535552744,
+      "validation_mae_eur": 47907.70213240408,
+      "validation_rmse_eur": 69632.24965038957
+    },
+    {
+      "fold": 5,
+      "train_observations": 72,
+      "train_start": "2017-01",
+      "train_end": "2022-12",
+      "validation_start": "2023-01",
+      "validation_end": "2023-12",
+      "train_mae_eur": 15767.494126520094,
+      "train_rmse_eur": 22659.42169230439,
+      "validation_mae_eur": 67989.50591022466,
+      "validation_rmse_eur": 86087.65891262109
+    }
+  ],
+  "training": {
+    "mae_eur": 15761.30202795806,
+    "rmse_eur": 22384.75236570571
+  },
+  "holdout": {
+    "mae_eur": 72750.67418875398,
+    "rmse_eur": 116871.61878761716
+  },
+  "mse_eur2": 13658975278.038107,
+  "mse_pct_of_average_revenue": 1051440.1205528898,
+  "gini": 0.7361111111111112,
+  "k2_score": 0.25
+}
