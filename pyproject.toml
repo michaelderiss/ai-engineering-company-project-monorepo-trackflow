@@ -23,6 +23,9 @@ dependencies = [
   "packaging>=23.0",
   "scikit-learn>=1.9.1",
   "matplotlib>=3.11.2",
+  "qdrant-client>=1.9.0",
+  "openai>=1.0.0",
+  "numpy>=1.24.0",
 ]
 
 [project.scripts]
