@@ -356,3 +356,28 @@ This is the current working baseline to preserve before additional feature work 
 - Reworked `scripts/train_sales_forecast.py` to evaluate the existing consolidated monthly sales Random Forest with a fixed 2016-2023 / 2024-2025 boundary, causal lag and rolling features, five expanding-window temporal CV folds, and a forward-chaining learning curve.
 - Evaluation outputs are written to `data/eval/`: `evaluation_report.md`, `sales_learning_curve.png`, `sales_forecast_evaluation.png`, and machine-readable metrics/learning-curve tables. The report classifies the observed fit and recommends a specific regularization trial based on the train/validation gap. Country-mix PSI is explicitly N/A because this consolidated-only CSV has no US/Spain breakdown.
 - Added split and fold-order/causal-boundary checks in `tests/pipelines/test_sales_forecast_temporal_cv.py`; focused evaluation tests passed in a temporary Python 3.13 environment (9 passed). The repository `.venv` could not be used because its `lib64` link is inaccessible, so the temporary environment was used for validation.
+
+## Milestone 7 — RAG & Knowledge Base (Knowledge Assistant) ? Complete
+
+**Source documents**
+- Created 4 company knowledge docs in `docs/company-knowledge-base/`: trackflow-carrier-coverage.en.md, trackflow-returns-policy.en.md, trackflow-sla-delivery.en.md, trackflow-storage-pricing.en.md.
+
+**Phase 1 — Document processing & ingestion (`data/process/rag.py`)**
+- `chunk_document()` splits a document into fixed-size overlapping chunks (returns raw markdown text); `embed()` calls OpenAI embeddings via `data.process.rag.OpenAI` (module-level import for test patching); `setup()` orchestrates chunking + embedding + upserting into a Qdrant collection.
+- Qdrant client uses `QDRANT_URL` / `QDRANT_API_KEY` env vars; collection name `trackflow_docs`; embeddings model `text-embedding-3-small`; dimension 1536.
+
+**Phase 2 — Retrieval & generation (`data/pipelines/rag.py`)**
+- `retrieve()` does a Qdrant vector search on the knowledge collection and filters hits by a `min_score` threshold; `generate_answer()` calls OpenAI (gpt-4o-mini) with a grounded system prompt; `query()` is the orchestrator joining retrieval + generation.
+- API endpoint `POST /knowledge/query` in `services/api/routes/knowledge.py`, registered in `services/api/main.py` via `knowledge_router`.
+
+**Phase 3 — UI**
+- `uis/rag-query/index.html` — standalone RAG query UI with light/dark mode and prepopulated example questions.
+
+**Phase 4 — Eval & tests**
+- `data/eval/test-queries.json` — 10 example salesperson questions.
+- `tests/pipelines/test_rag.py` — 11 unit tests (retrieve, generate_answer, query, chunking, setup) using a FakeScoredPoint helper and mocked OpenAI/Qdrant. All 11 pass.
+
+**Phase 5 — Design doc**
+- `docs/rag/rag-design.md` — full RAG design doc.
+
+Delivery notes: Qdrant + OpenAI are external services; `setup()` must be run to populate the collection. No local vector DB is bundled — the pipeline assumes an external Qdrant instance.
