@@ -6,6 +6,27 @@ The API loads the root `.env` at startup. `PASSWORD_RESET_TOKEN_EXPIRE_MINUTES` 
 
 Reset links and recipient addresses are not printed by default. For local development only, explicitly set `ALLOW_PASSWORD_RESET_CONSOLE_FALLBACK=true` in the root `.env` to print a usable reset link when Resend is unavailable. Restart the API after changing the setting. Never enable this in production or shared logs; console links are credentials. Real email still requires a valid Resend key and sender.
 
+## LangGraph RAG Agent
+
+`POST /agent/query` invokes the compiled LangGraph flow in `services/agent/graph.py`.
+The graph keeps only the question, retrieved context, answer, and error in its
+state. It routes empty questions to a clear error, routes retrieved context to
+answer generation, and routes no-context retrievals to an honest fallback.
+
+```json
+{"question":"What is the TrackFlow standard return window?"}
+```
+
+Successful responses include `run_id` and `answer`. `GET /agent/traces/{run_id}`
+returns the node sequence, status, answer/error, and checkpoint snapshots for that
+run. Execution failures return a generic 500 response and never expose internals.
+
+Run the agent evals with:
+
+```powershell
+uv run pytest tests/pipelines/test_langgraph_agent.py -q
+```
+
 ## Telemetry Event Storage
 
 Telemetry uses `TELEMETRY_DATABASE_URL`, separate from inventory's `DATABASE_URL`. Apply `services/telemetry/schema.sql` to the Supabase project to create the event table and indexes. The service exposes `POST /api/telemetry/events`; it validates each event independently and returns `received`, `stored`, and `rejected` counts. API timing and successful or rejected supplier mutations are emitted from the FastAPI service without changing either frontend.

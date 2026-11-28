@@ -37,6 +37,18 @@
 
 ## Completed
 
+## LangGraph RAG Agent Base
+
+- Added a compiled LangGraph state machine in `services/agent/` that reuses
+  `data.pipelines.rag.retrieve()` and `generate_answer()` separately.
+- The graph has receive, retrieve, generate, no-context, and empty-question nodes
+  with conditional routing. It uses `MemorySaver` checkpointing and stores queryable
+  structured traces plus checkpoint snapshots per run.
+- Added `POST /agent/query` and `GET /agent/traces/{run_id}` to the FastAPI service.
+  Graph/runtime failures are converted to generic API errors.
+- Added five runnable agent eval/structural tests in `tests/pipelines/test_langgraph_agent.py`.
+  Existing RAG tests remain passing alongside the new graph evaluations.
+
 ## INFRA-40 — Dockerization & Production Deploy
 
 - Dockerized the entire monorepo for reproducible development environments.

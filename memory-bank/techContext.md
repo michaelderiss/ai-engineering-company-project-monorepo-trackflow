@@ -35,6 +35,20 @@
 
 ## Current repository baseline
 
+## LangGraph RAG Agent
+
+- `services/agent/graph.py` defines an explicit `AgentState` TypedDict containing
+  only `question`, `context`, `answer`, and `error`.
+- `StateGraph` nodes are single-responsibility: receive, retrieve, generate,
+  no-context fallback, and empty-question rejection. Conditional edges route
+  after receive and retrieve rather than using a fixed sequence.
+- The graph is compiled once before execution with `MemorySaver`; each run uses
+  a unique thread ID. The in-memory trace store exposes node order and checkpoint
+  snapshots by run ID through `GET /agent/traces/{run_id}`.
+- `retrieve_context` calls `data.pipelines.rag.retrieve()` and
+  `generate_grounded_answer` calls `data.pipelines.rag.generate_answer()`.
+  The monolithic `query()` function is not called from the graph.
+
 This repository now combines three active implementation layers:
 
 - repo-level agent governance and memory-bank rules

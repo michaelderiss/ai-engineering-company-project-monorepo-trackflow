@@ -37,6 +37,7 @@ from services.api.routes.users import router as users_router  # noqa: E402
 from services.api.routes.incidents import router as incidents_router  # noqa: E402
 from services.api.routes.inventory import router as inventory_router  # noqa: E402
 from services.api.routes.knowledge import router as knowledge_router  # noqa: E402
+from services.api.routes.agent import router as agent_router  # noqa: E402
 from services.api import telemetry as telemetry_module  # noqa: E402
 from services.api.telemetry import report_router as telemetry_report_router  # noqa: E402
 from services.api.telemetry import router as telemetry_router  # noqa: E402
@@ -130,6 +131,7 @@ app.include_router(profiles_router)
 app.include_router(suppliers_router)
 app.include_router(inventory_router)
 app.include_router(knowledge_router)
+app.include_router(agent_router)
 app.include_router(telemetry_router)
 app.include_router(telemetry_report_router)
 app.include_router(reporting_router)
