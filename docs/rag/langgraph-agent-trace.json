@@ -1,0 +1,63 @@
+{
+  "run_id": "919d0a8a-5f81-4f72-81bc-b5b40c22acd7",
+  "thread_id": "agent-919d0a8a-5f81-4f72-81bc-b5b40c22acd7",
+  "status": "completed",
+  "nodes": [
+    {
+      "node": "receive",
+      "output": {
+        "question": "What is the TrackFlow return window?",
+        "answer": "",
+        "error": ""
+      }
+    },
+    {
+      "node": "retrieve",
+      "output": {}
+    },
+    {
+      "node": "generate",
+      "output": {
+        "answer": "Based on the returns-policy knowledge base, eligible products have a 30-day return window."
+      }
+    }
+  ],
+  "answer": "Based on the returns-policy knowledge base, eligible products have a 30-day return window.",
+  "error": "",
+  "checkpoints": [
+    {},
+    {
+      "question": "What is the TrackFlow return window?"
+    },
+    {
+      "question": "What is the TrackFlow return window?",
+      "context": [],
+      "answer": "",
+      "error": ""
+    },
+    {
+      "question": "What is the TrackFlow return window?",
+      "context": [
+        {
+          "source_document": "returns-policy",
+          "section": "Standard Return Window",
+          "text": "TrackFlow offers a 30-day return window for eligible products."
+        }
+      ],
+      "answer": "",
+      "error": ""
+    },
+    {
+      "question": "What is the TrackFlow return window?",
+      "context": [
+        {
+          "source_document": "returns-policy",
+          "section": "Standard Return Window",
+          "text": "TrackFlow offers a 30-day return window for eligible products."
+        }
+      ],
+      "answer": "Based on the returns-policy knowledge base, eligible products have a 30-day return window.",
+      "error": ""
+    }
+  ]
+}

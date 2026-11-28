@@ -16,6 +16,29 @@ endpoint unit tests) and **FE-019** (frontend utility function tests).
 
 ## 1. How to run the tests
 
+### LangGraph agent evaluations
+
+```bash
+uv run pytest tests/pipelines/test_langgraph_agent.py -q
+```
+
+The agent eval command verifies conditional routing, retrieval-before-generation
+order, honest no-context behavior, grounded answer text, compiled graph setup,
+and checkpointed traces. These evaluations use mocked RAG functions and are not
+live LLM/Qdrant executions.
+
+### LangGraph external-tool routing
+
+```bash
+uv run pytest tests/pipelines/test_langgraph_agent.py -q
+```
+
+The external-tool evals verify that ticket questions use the live incident
+manager tool without RAG retrieval, policy questions use RAG without the incident
+tool, combined questions can use both sources, and missing or timed-out incidents
+return the honest confirmation fallback. Submission traces are stored under
+`docs/rag/`.
+
 ### Backend — FastAPI + pytest (project root)
 
 ```bash

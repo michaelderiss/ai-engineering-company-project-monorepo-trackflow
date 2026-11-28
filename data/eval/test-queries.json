@@ -1,0 +1,62 @@
+[
+  {
+    "id": "q01",
+    "question": "What is TrackFlow's standard delivery SLA for express shipments in the United States?",
+    "expected_document": "sla-delivery",
+    "expected_section": "Standard Delivery Timeframes"
+  },
+  {
+    "id": "q02",
+    "question": "Can we promise standard delivery SLAs during Black Friday or Christmas season?",
+    "expected_document": "sla-delivery",
+    "expected_section": "High-Demand Period Exceptions"
+  },
+  {
+    "id": "q03",
+    "question": "What is the standard return window for products managed by TrackFlow?",
+    "expected_document": "returns-policy",
+    "expected_section": "Standard Return Window"
+  },
+  {
+    "id": "q04",
+    "question": "Are international returns processed automatically like domestic returns?",
+    "expected_document": "returns-policy",
+    "expected_section": "International Returns"
+  },
+  {
+    "id": "q05",
+    "question": "Which carrier covers rural Aragón with the best rate for last-mile delivery?",
+    "expected_document": "carrier-coverage",
+    "expected_section": "Nacex"
+  },
+  {
+    "id": "q06",
+    "question": "What is the rate per shipment for OnTrac and what zone does it cover?",
+    "expected_document": "carrier-coverage",
+    "expected_section": "OnTrac"
+  },
+  {
+    "id": "q07",
+    "question": "What is the monthly storage rate for climate-controlled pallets in the LA warehouse?",
+    "expected_document": "storage-pricing",
+    "expected_section": "Standard Storage Rates"
+  },
+  {
+    "id": "q08",
+    "question": "Can you offer a custom storage discount above 10% without approval?",
+    "expected_document": "storage-pricing",
+    "expected_section": "Volume Discounts"
+  },
+  {
+    "id": "q09",
+    "question": "Is DHL Express available for international shipments from the Zaragoza warehouse?",
+    "expected_document": "carrier-coverage",
+    "expected_section": "DHL Express España"
+  },
+  {
+    "id": "q10",
+    "question": "What is the restocking fee percentage for returns that are not due to a TrackFlow error?",
+    "expected_document": "returns-policy",
+    "expected_section": "Restocking Fees"
+  }
+]

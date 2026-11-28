@@ -1,0 +1,120 @@
+{
+  "run_id": "73281478-2055-49a8-81e7-56c84096825e",
+  "thread_id": "agent-73281478-2055-49a8-81e7-56c84096825e",
+  "status": "completed",
+  "nodes": [
+    {
+      "node": "receive",
+      "output": {
+        "question": "What is the status of ticket 482?",
+        "answer": "",
+        "error": "",
+        "ticket": null,
+        "sources": []
+      }
+    },
+    {
+      "node": "classify",
+      "output": {
+        "route": "ticket",
+        "ticket_id": 482
+      }
+    },
+    {
+      "node": "ticket_lookup",
+      "output": {
+        "ticket": {
+          "found": true,
+          "ticket_id": 482,
+          "status": "in_progress",
+          "category": "carrier_issue",
+          "origin": null,
+          "branch": null,
+          "title": "Parcel delayed",
+          "created_at": null,
+          "updated_at": null,
+          "fallback": "none"
+        },
+        "sources": [
+          "ticket"
+        ]
+      }
+    },
+    {
+      "node": "ticket_answer",
+      "output": {
+        "answer": "Ticket 482 (Parcel delayed) is currently in_progress; its category is carrier_issue."
+      }
+    }
+  ],
+  "answer": "Ticket 482 (Parcel delayed) is currently in_progress; its category is carrier_issue.",
+  "error": "",
+  "checkpoints": [
+    {},
+    {
+      "question": "What is the status of ticket 482?"
+    },
+    {
+      "question": "What is the status of ticket 482?",
+      "context": [],
+      "answer": "",
+      "error": "",
+      "sources": []
+    },
+    {
+      "question": "What is the status of ticket 482?",
+      "context": [],
+      "answer": "",
+      "error": "",
+      "route": "ticket",
+      "ticket_id": 482,
+      "sources": []
+    },
+    {
+      "question": "What is the status of ticket 482?",
+      "context": [],
+      "answer": "",
+      "error": "",
+      "route": "ticket",
+      "ticket_id": 482,
+      "ticket": {
+        "found": true,
+        "ticket_id": 482,
+        "status": "in_progress",
+        "category": "carrier_issue",
+        "origin": null,
+        "branch": null,
+        "title": "Parcel delayed",
+        "created_at": null,
+        "updated_at": null,
+        "fallback": "none"
+      },
+      "sources": [
+        "ticket"
+      ]
+    },
+    {
+      "question": "What is the status of ticket 482?",
+      "context": [],
+      "answer": "Ticket 482 (Parcel delayed) is currently in_progress; its category is carrier_issue.",
+      "error": "",
+      "route": "ticket",
+      "ticket_id": 482,
+      "ticket": {
+        "found": true,
+        "ticket_id": 482,
+        "status": "in_progress",
+        "category": "carrier_issue",
+        "origin": null,
+        "branch": null,
+        "title": "Parcel delayed",
+        "created_at": null,
+        "updated_at": null,
+        "fallback": "none"
+      },
+      "sources": [
+        "ticket"
+      ]
+    }
+  ]
+}

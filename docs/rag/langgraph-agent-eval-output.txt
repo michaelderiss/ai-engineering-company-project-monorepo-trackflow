@@ -1,0 +1,43 @@
+................                                                         [100%]
+============================== warnings summary ===============================
+.venv\Lib\site-packages\starlette\formparsers.py:10
+  C:\Users\micha\Downloads\ai-engineering-company-project-monorepo-trackflow\.venv\Lib\site-packages\starlette\formparsers.py:10: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+.venv\Lib\site-packages\starlette\testclient.py:29
+  C:\Users\micha\Downloads\ai-engineering-company-project-monorepo-trackflow\.venv\Lib\site-packages\starlette\testclient.py:29: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+______________ coverage: platform win32, python 3.13.13-final-0 _______________
+
+Name                                 Stmts   Miss  Cover   Missing
+------------------------------------------------------------------
+services\api\__init__.py                 0      0   100%
+services\api\auth.py                    85     57    33%   35, 39, 43-48, 52-55, 59-78, 82-96, 100-108, 112-128, 132-144, 148-150
+services\api\cache.py                   37     18    51%   13, 21-33, 36-37, 45-49
+services\api\database.py               246    204    17%   35, 39-40, 44-45, 49, 53, 57-59, 63, 67-71, 75-80, 84-95, 99-103, 107-112, 116-125, 129-135, 139-144, 148-164, 168-178, 182-190, 194-202, 206-234, 238-273, 277-279, 294-314, 318-327, 331-345, 349-353, 357-372, 376-403
+services\api\email.py                   36     24    33%   20, 29-73
+services\api\incidents.py               66     51    23%   16-42, 46-61, 65-70, 74-76, 80-90, 94-100
+services\api\inventory_database.py      77     48    38%   27-29, 36, 128-129, 133-139, 143-208, 212-213, 217-229, 233-247
+services\api\inventory_models.py        37      1    97%   10
+services\api\inventory_schemas.py       85      7    92%   61-69
+services\api\main.py                   153     82    46%   22, 52-74, 118-125, 143-145, 155-181, 186-216, 227-228, 235-250, 255-256, 261-270
+services\api\models.py                 116     17    85%   63-65, 78-80, 141-144, 148-154
+services\api\response_schemas.py       132      0   100%
+services\api\routes\__init__.py          0      0   100%
+services\api\routes\agent.py            37     13    65%   42-52, 57-60
+services\api\routes\auth.py             43     18    58%   34-37, 42, 47, 55-61, 68-73, 81-90
+services\api\routes\incidents.py        36     15    58%   25, 30, 35, 45, 50-53, 58-64
+services\api\routes\inventory.py       114     79    31%   54-78, 82-83, 96-97, 105, 122-134, 142-145, 158-168, 181-212, 219-255, 268-290
+services\api\routes\knowledge.py        16      3    81%   43-45
+services\api\routes\profiles.py         55     36    35%   23-26, 31-36, 41-44, 53-63, 71-79, 88-99
+services\api\routes\suppliers.py        47     28    40%   33-37, 46-48, 53-56, 65-74, 83-92, 100-109
+services\api\routes\users.py            49     31    37%   14-16, 24-27, 32, 37-41, 50-62, 67-74
+services\api\seed.py                    13     13     0%   1-19
+services\api\telemetry.py              193    131    32%   78-119, 137-143, 147, 151-154, 158, 175-208, 213-228, 233-271, 275-283, 292-307, 318-327
+services\api\telemetry_database.py      22     22     0%   3-35
+------------------------------------------------------------------
+TOTAL                                 1695    898    47%
+16 passed, 2 warnings in 1.20s

@@ -1,5 +1,19 @@
 # Technical Context
 
+## DEV-55 Celery async reporting
+
+- `services/celery_app.py` creates the shared Celery app using `REDIS_URL` for both broker and result backend; Compose defaults to `redis://redis:6379/0`. A host-launched worker must use `redis://localhost:6379/0` when Redis is published by Compose.
+- `services/reporting/routes.py` enqueues the existing weekly warehouse/client performance flow; its message contains only `week_start`. The status endpoint maps Celery states and exposes JSON result/error for terminal tasks.
+- `services/reporting/tasks.py` runs the ETL in a separate worker process, late-acks on success, enforces 840s soft/900s hard time limits, retries three times at 2/4/8 seconds, then writes terminal attempt/error/time to `reporting.task_dead_letters` and posts a compact notice to the unconsumed `dead_letter` queue. DLQ persistence requires `TELEMETRY_DATABASE_URL` and schema write access.
+- Compose starts Redis with AOF/noeviction, the independent `worker`, and Flower at `localhost:5555`; the worker consumes only the normal `celery` queue. README contains startup/stop instructions.
+
+## Nightly telemetry orchestration
+
+- `scripts/nightly_export.py` is an independent CLI worker, not an API lifespan/background task. It targets yesterday in UTC by default; `TARGET_DATE=YYYY-MM-DD` supports replay/testing.
+- `services/job_runner.py` owns the `job_runs` lifecycle and status queries. `services/telemetry/job_runs.sql` installs the table/indexes in the same PostgreSQL database as telemetry (`TELEMETRY_DATABASE_URL`). A partial unique index on `job_name` where status is `processing` makes the status-based lock atomic across processes; no second lock is used.
+- The worker exports a deterministic UTC-day snapshot to `data/raw/telemetry_YYYY-MM-DD.csv` only when absent, then executes the existing `data.pipelines.pipeline` CLI in a subprocess. The CSV is audit backup only; Milestone 6 reads from telemetry DB. `job_runs` is orchestration metadata and remains separate from `reporting.pipeline_runs`.
+- Production scheduling is host crontab at 02:15 UTC (`CRON_TZ=UTC`, `15 2 * * *`); operational setup, environment, and sample log lines are in `scripts/NIGHTLY_EXPORT.md`. No host crontab is changed by repository code.
+
 ## Telemetry Event Storage
 
 - Telemetry persistence uses the dedicated PostgreSQL engine in
@@ -20,6 +34,29 @@
   no dashboard or separate auth metric is included.
 
 ## Current repository baseline
+
+## LangGraph RAG Agent
+
+- `services/agent/graph.py` defines an explicit `AgentState` TypedDict containing
+  only `question`, `context`, `answer`, and `error`.
+- `StateGraph` nodes are single-responsibility: receive, retrieve, generate,
+  no-context fallback, and empty-question rejection. Conditional edges route
+  after receive and retrieve rather than using a fixed sequence.
+- The graph is compiled once before execution with `MemorySaver`; each run uses
+  a unique thread ID. The in-memory trace store exposes node order and checkpoint
+  snapshots by run ID through `GET /agent/traces/{run_id}`.
+- `retrieve_context` calls `data.pipelines.rag.retrieve()` and
+  `generate_grounded_answer` calls `data.pipelines.rag.generate_answer()`.
+  The monolithic `query()` function is not called from the graph.
+
+## LangGraph External Tools
+
+- `services/agent/tools.py` defines `TicketLookupInput` and `TicketLookupOutput`
+  Pydantic contracts. `lookup_ticket()` performs read-only in-process access to
+  `services.api.incidents.get_incident()` with a 3-second timeout.
+- The incident tool is separate from RAG retrieval. Routing is inferred by the
+  question, can select RAG, the ticket tool, or both, and records `sources` and
+  node order in every trace.
 
 This repository now combines three active implementation layers:
 
@@ -303,8 +340,33 @@ The backoffice and talent-pipeline-tracker apps now implement a complete JWT-bas
 - Milestone 2 logic in `src/` is currently authoritative for local utility behavior and demo coverage.
 - A future decision is needed on consolidation: keep `src/` as milestone playground vs move reusable logic to `packages/shared`.
 
+## DEV-53 nightly export worker notes
+
+- The standalone worker uses the UTC day for CSV and orchestration idempotency, then passes the Monday of that date's ISO week to the existing weekly ETL (`data.pipelines.pipeline --week-start`). This preserves Milestone 6's weekly aggregation contract; it does not read from the CSV.
+- Worker CLI loads repository-root `.env.worker` for local development with `override=False`. Production should provide `TELEMETRY_DATABASE_URL` via the host's secret environment file.
+- The installed Prefect 2 API uses `get_run_logger()` with no positional module name. Optional task failures must be caught explicitly by the load subflow if they are not to fail the pipeline.
+- End-to-end live check passed for target 2026-11-10: 20 CSV data rows, `job_runs` completed, `reporting.pipeline_runs` completed, zero processing locks. ETL extracted zero rows because none of the day's events match its supported business KPI event types.
+- Production cron is documented but not installed from this Windows environment. Operator deployment remains required.
+
 ## Validation and working practices
 
 - Website and backoffice have local validation commands: `npm run typecheck` and `npm run build`.
 - Memory updates remain mandatory when architecture, milestone output, or workflow interpretation changes.
 - Git hygiene from earlier GH001 issue remains relevant: generated artifacts (`node_modules`, `.next`, `out`) must stay untracked.
+
+## Sales model evaluation (ETM)
+
+- `scripts/train_sales_forecast.py` now performs an end-to-end regression evaluation for `revenue_eur` from consolidated TrackFlow rows. The 8-year/2-year split is anchored to the original series (2016-01â€“2023-12 vs 2024-01â€“2025-12); lag warm-up means 84 training feature rows and 24 holdout rows.
+- Features are one-step-ahead and causal (past-only revenue, shipments, revenue-per-shipment lags and shifted rolling means, plus calendar/seasonality features). Five-fold expanding-window TimeSeriesSplit is used without shuffling; models are fit only on each fold's training prefix. Validation can use prior observed months, consistent with rolling monthly forecasts.
+- `data/eval/evaluation_report.md` records train/validation MAE and RMSE, CV mean Â± sample SD, explicit diagnosis, concrete action, business metric rationale, and MSE/Gini/K2 holdout measures. A country operation-mix PSI is unavailable from consolidated-only data and is not fabricated. Learning curve and holdout charts plus JSON/CSV metric artifacts are generated by rerunning the script.
+- `scikit-learn` and `matplotlib` are declared in `pyproject.toml` and `uv.lock` for reproducibility.
+
+## Milestone 7 — RAG & Knowledge Base (tech context)
+
+- Qdrant vector search + OpenAI embeddings/generation for the TrackFlow knowledge assistant.
+- `data/process/rag.py` handles chunking/embedding/ingestion; `data/pipelines/rag.py` handles retrieval/generation/query orchestration. Both import `OpenAI` at module level so tests can patch `data.process.rag.OpenAI` / `data.pipelines.rag.OpenAI`.
+- Env vars: `QDRANT_URL`, `QDRANT_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`. Collection `trackflow_docs` (dim 1536, model `text-embedding-3-small`). Generation model `gpt-4o-mini`.
+- Chunking strategy: fixed-size overlapping chunks (see `docs/rag/rag-design.md`); `min_score` filter on retrieval.
+- API: `POST /knowledge/query` in `services/api/routes/knowledge.py` (registered in `services/api/main.py`). UI: `uis/rag-query/index.html`.
+- Tests: `tests/pipelines/test_rag.py` (11 tests) use a `FakeScoredPoint` helper and mocked OpenAI/Qdrant — no live external services required.
+- External service assumption: a running Qdrant instance and valid OpenAI key are required for `setup()`/live queries; unit tests do not touch these.
