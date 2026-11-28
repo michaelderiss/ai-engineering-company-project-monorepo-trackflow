@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import patch
 
 from services.agent.graph import get_compiled_graph, run_agent
+from services.agent.tools import TicketLookupOutput, lookup_ticket
 
 
 @patch("services.agent.graph.generate_answer")
@@ -42,6 +44,7 @@ def test_retrieval_runs_before_generation(mock_retrieve, mock_generate):
     )
     assert [entry["node"] for entry in result["trace"]["nodes"]] == [
         "receive",
+        "classify",
         "retrieve",
         "generate",
     ]
@@ -58,6 +61,7 @@ def test_no_context_routes_to_honest_answer(mock_retrieve, mock_generate):
     mock_generate.assert_not_called()
     assert [entry["node"] for entry in result["trace"]["nodes"]] == [
         "receive",
+        "classify",
         "retrieve",
         "no_context",
     ]
@@ -90,3 +94,104 @@ def test_graph_is_compiled_before_execution():
     graph = get_compiled_graph()
 
     assert graph is not None
+
+
+@patch("services.agent.graph.lookup_ticket")
+@patch("services.agent.graph.retrieve")
+@patch("services.agent.graph.generate_answer")
+def test_ticket_question_routes_to_ticket_tool_only(
+    mock_generate,
+    mock_retrieve,
+    mock_lookup,
+):
+    mock_lookup.return_value = TicketLookupOutput(
+        found=True,
+        ticket_id=482,
+        status="in_progress",
+        category="carrier_issue",
+        title="Parcel delayed",
+    )
+
+    result = run_agent("What is the status of ticket 482?")
+
+    mock_lookup.assert_called_once_with(482)
+    mock_retrieve.assert_not_called()
+    mock_generate.assert_not_called()
+    assert [entry["node"] for entry in result["trace"]["nodes"]] == [
+        "receive",
+        "classify",
+        "ticket_lookup",
+        "ticket_answer",
+    ]
+    assert "in_progress" in result["answer"]
+    assert "ticket" in result["trace"]["checkpoints"][-1]["sources"]
+
+
+@patch("services.agent.graph.lookup_ticket")
+@patch("services.agent.graph.retrieve")
+@patch("services.agent.graph.generate_answer")
+def test_policy_question_routes_to_rag_only(
+    mock_generate,
+    mock_retrieve,
+    mock_lookup,
+):
+    chunk = {
+        "source_document": "returns-policy",
+        "section": "Standard Return Window",
+        "text": "Eligible products have a 30-day return window.",
+    }
+    mock_retrieve.return_value = [chunk]
+    mock_generate.return_value = "The policy allows 30 days."
+
+    result = run_agent("What is the standard return policy?")
+
+    mock_lookup.assert_not_called()
+    mock_retrieve.assert_called_once_with("What is the standard return policy?")
+    mock_generate.assert_called_once()
+    assert [entry["node"] for entry in result["trace"]["nodes"]] == [
+        "receive",
+        "classify",
+        "retrieve",
+        "generate",
+    ]
+    assert "rag" in result["trace"]["checkpoints"][-1]["sources"]
+
+
+@patch("services.agent.graph.lookup_ticket")
+@patch("services.agent.graph.retrieve")
+def test_ticket_not_found_has_honest_fallback(mock_retrieve, mock_lookup):
+    mock_lookup.return_value = TicketLookupOutput(
+        found=False,
+        ticket_id=999,
+        fallback="not_found",
+    )
+
+    result = run_agent("Can you show ticket 999?")
+
+    mock_retrieve.assert_not_called()
+    assert result["answer"] == "I couldn't confirm that ticket's status right now."
+    assert result["trace"]["nodes"][-1]["node"] == "ticket_answer"
+
+
+@patch("services.agent.tools.incident_store.get_incident")
+def test_ticket_tool_returns_not_found_contract(mock_get_incident):
+    mock_get_incident.return_value = None
+
+    output = lookup_ticket(999)
+
+    mock_get_incident.assert_called_once_with(999)
+    assert output.found is False
+    assert output.fallback == "not_found"
+
+
+@patch("services.agent.tools.incident_store.get_incident")
+def test_ticket_tool_times_out_with_numeric_fallback(mock_get_incident):
+    mock_get_incident.side_effect = lambda ticket_id: time.sleep(3.2)
+
+    started = time.monotonic()
+    output = lookup_ticket(482)
+    elapsed = time.monotonic() - started
+
+    assert output.found is False
+    assert output.fallback == "timeout"
+    assert elapsed < 3.5

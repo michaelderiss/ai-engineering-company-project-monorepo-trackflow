@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import threading
 import uuid
+import re
 from typing import Any, Literal, TypedDict
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from data.pipelines.rag import generate_answer, retrieve
+from services.agent.tools import TicketLookupOutput, lookup_ticket
 
 
 class AgentState(TypedDict, total=False):
@@ -19,6 +21,10 @@ class AgentState(TypedDict, total=False):
     context: list[dict[str, Any]]
     answer: str
     error: str
+    route: Literal["rag", "ticket", "both"]
+    ticket_id: int | None
+    ticket: dict[str, Any] | None
+    sources: list[str]
 
 
 class AgentExecutionError(RuntimeError):
@@ -36,7 +42,75 @@ _checkpointer = MemorySaver()
 
 def receive_question(state: AgentState) -> AgentState:
     question = str(state.get("question") or "").strip()
-    return {"question": question, "context": [], "answer": "", "error": ""}
+    return {
+        "question": question,
+        "context": [],
+        "answer": "",
+        "error": "",
+        "ticket": None,
+        "sources": [],
+    }
+
+
+def classify_route(state: AgentState) -> AgentState:
+    question = state["question"].lower()
+    match = re.search(r"\b(?:ticket|incident)\s*(?:#|no\.?|number)?\s*(\d+)\b", question)
+    ticket_id = int(match.group(1)) if match else None
+
+    rag_terms = (
+        "policy",
+        "return",
+        "sla",
+        "delivery",
+        "storage",
+        "carrier",
+        "coverage",
+        "procedure",
+        "discount",
+    )
+    wants_rag = any(term in question for term in rag_terms)
+
+    if ticket_id is not None and wants_rag:
+        route: Literal["rag", "ticket", "both"] = "both"
+    elif ticket_id is not None:
+        route = "ticket"
+    else:
+        route = "rag"
+
+    return {"route": route, "ticket_id": ticket_id}
+
+
+def ticket_lookup(state: AgentState) -> AgentState:
+    ticket_id = state.get("ticket_id")
+    if ticket_id is None:
+        return {
+            "ticket": {"found": False, "fallback": "not_found", "ticket_id": None},
+            "sources": ["ticket"],
+        }
+
+    result: TicketLookupOutput = lookup_ticket(ticket_id)
+    return {
+        "ticket": result.dict(),
+        "sources": ["ticket"],
+    }
+
+
+def answer_from_ticket(state: AgentState) -> AgentState:
+    ticket = state.get("ticket") or {}
+    if not ticket.get("found"):
+        return {
+            "answer": "I couldn't confirm that ticket's status right now.",
+        }
+
+    ticket_id = ticket["ticket_id"]
+    status = ticket.get("status") or "unknown"
+    category = ticket.get("category") or "not provided"
+    title = ticket.get("title") or "no title"
+    answer = (
+        f"Ticket {ticket_id} ({title}) is currently {status}; "
+        f"its category is {category}."
+    )
+    return {"answer": answer}
 
 
 def retrieve_context(state: AgentState) -> AgentState:
@@ -45,7 +119,10 @@ def retrieve_context(state: AgentState) -> AgentState:
         context = retrieve(question)
     except Exception as exc:
         raise AgentExecutionError("The knowledge base could not be searched.") from exc
-    return {"context": context}
+    sources = list(state.get("sources") or [])
+    if "rag" not in sources:
+        sources.append("rag")
+    return {"context": context, "sources": sources}
 
 
 def generate_grounded_answer(state: AgentState) -> AgentState:
@@ -69,12 +146,57 @@ def reject_empty_question(state: AgentState) -> AgentState:
     }
 
 
-def route_after_receive(state: AgentState) -> Literal["retrieve", "empty_error"]:
-    return "retrieve" if state["question"] else "empty_error"
+def route_after_receive(state: AgentState) -> Literal["classify", "empty_error"]:
+    return "classify" if state["question"] else "empty_error"
 
 
-def route_after_retrieve(state: AgentState) -> Literal["generate", "no_context"]:
+def route_after_classify(state: AgentState) -> Literal["ticket", "retrieve", "ticket_then_retrieve"]:
+    route = state["route"]
+    if route == "ticket":
+        return "ticket"
+    if route == "both":
+        return "ticket_then_retrieve"
+    return "retrieve"
+
+
+def route_after_retrieve(state: AgentState) -> Literal["generate", "no_context", "ticket_and_rag"]:
+    if state.get("route") == "both":
+        return "ticket_and_rag"
     return "generate" if state["context"] else "no_context"
+
+
+def generate_ticket_and_rag_answer(state: AgentState) -> AgentState:
+    ticket = state.get("ticket") or {}
+    context = list(state.get("context") or [])
+
+    if ticket.get("found"):
+        context.append({
+            "source_document": "incident-manager",
+            "section": f"Ticket {ticket['ticket_id']}",
+            "text": (
+                f"Ticket {ticket['ticket_id']} is currently {ticket.get('status') or 'unknown'}, "
+                f"category {ticket.get('category') or 'not provided'}, "
+                f"title {ticket.get('title') or 'no title'}."
+            ),
+            "company": "trackflow",
+            "language": "en",
+            "chunk_index": 0,
+        })
+    else:
+        context.append({
+            "source_document": "incident-manager",
+            "section": f"Ticket {ticket.get('ticket_id')}",
+            "text": "I couldn't confirm that ticket's status right now.",
+            "company": "trackflow",
+            "language": "en",
+            "chunk_index": 0,
+        })
+
+    try:
+        answer = generate_answer(state["question"], context)
+    except Exception as exc:
+        raise AgentExecutionError("The combined answer could not be generated.") from exc
+    return {"answer": answer}
 
 
 def build_agent_graph(checkpointer: MemorySaver | None = None):
@@ -82,8 +204,12 @@ def build_agent_graph(checkpointer: MemorySaver | None = None):
 
     graph = StateGraph(AgentState)
     graph.add_node("receive", receive_question)
+    graph.add_node("classify", classify_route)
+    graph.add_node("ticket_lookup", ticket_lookup)
+    graph.add_node("ticket_answer", answer_from_ticket)
     graph.add_node("retrieve", retrieve_context)
     graph.add_node("generate", generate_grounded_answer)
+    graph.add_node("ticket_and_rag_answer", generate_ticket_and_rag_answer)
     graph.add_node("no_context", answer_without_context)
     graph.add_node("empty_error", reject_empty_question)
 
@@ -91,14 +217,34 @@ def build_agent_graph(checkpointer: MemorySaver | None = None):
     graph.add_conditional_edges(
         "receive",
         route_after_receive,
-        {"retrieve": "retrieve", "empty_error": "empty_error"},
+        {"classify": "classify", "empty_error": "empty_error"},
     )
+    graph.add_conditional_edges(
+        "classify",
+        route_after_classify,
+        {
+            "ticket": "ticket_lookup",
+            "retrieve": "retrieve",
+            "ticket_then_retrieve": "ticket_lookup",
+        },
+    )
+    graph.add_conditional_edges(
+        "ticket_lookup",
+        lambda state: "retrieve" if state["route"] == "both" else "end",
+        {"retrieve": "retrieve", "end": "ticket_answer"},
+    )
+    graph.add_edge("ticket_answer", END)
     graph.add_conditional_edges(
         "retrieve",
         route_after_retrieve,
-        {"generate": "generate", "no_context": "no_context"},
+        {
+            "generate": "generate",
+            "no_context": "no_context",
+            "ticket_and_rag": "ticket_and_rag_answer",
+        },
     )
     graph.add_edge("generate", END)
+    graph.add_edge("ticket_and_rag_answer", END)
     graph.add_edge("no_context", END)
     graph.add_edge("empty_error", END)
 
@@ -150,7 +296,15 @@ def run_agent(question: str) -> dict[str, Any]:
                         "output": {
                             key: value
                             for key, value in node_output.items()
-                            if key in {"question", "answer", "error"}
+                            if key in {
+                                "question",
+                                "answer",
+                                "error",
+                                "route",
+                                "ticket_id",
+                                "ticket",
+                                "sources",
+                            }
                         },
                     }
                 )

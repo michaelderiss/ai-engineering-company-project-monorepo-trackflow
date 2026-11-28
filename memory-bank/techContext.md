@@ -49,6 +49,15 @@
   `generate_grounded_answer` calls `data.pipelines.rag.generate_answer()`.
   The monolithic `query()` function is not called from the graph.
 
+## LangGraph External Tools
+
+- `services/agent/tools.py` defines `TicketLookupInput` and `TicketLookupOutput`
+  Pydantic contracts. `lookup_ticket()` performs read-only in-process access to
+  `services.api.incidents.get_incident()` with a 3-second timeout.
+- The incident tool is separate from RAG retrieval. Routing is inferred by the
+  question, can select RAG, the ticket tool, or both, and records `sources` and
+  node order in every trace.
+
 This repository now combines three active implementation layers:
 
 - repo-level agent governance and memory-bank rules

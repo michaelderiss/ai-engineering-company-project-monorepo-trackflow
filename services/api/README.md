@@ -27,6 +27,19 @@ Run the agent evals with:
 uv run pytest tests/pipelines/test_langgraph_agent.py -q
 ```
 
+### Ticket lookup tool
+
+The support agent routes ticket/incident questions automatically to the typed
+read-only incident tool in `services/agent/tools.py`. The tool calls the existing
+in-process `services.api.incidents.get_incident()` repository function and returns
+only status, category, origin, branch, title, and timestamps. It does not use or
+create any parallel incident dataset.
+
+The incident lookup has an explicit 3-second timeout. Timeout, exception, and
+missing-ticket outcomes return `I couldn't confirm that ticket's status right now`
+instead of inventing live status. The incident route remains bearer-protected for
+HTTP callers; the in-process tool does not require or hardcode credentials.
+
 ## Telemetry Event Storage
 
 Telemetry uses `TELEMETRY_DATABASE_URL`, separate from inventory's `DATABASE_URL`. Apply `services/telemetry/schema.sql` to the Supabase project to create the event table and indexes. The service exposes `POST /api/telemetry/events`; it validates each event independently and returns `received`, `stored`, and `rejected` counts. API timing and successful or rejected supplier mutations are emitted from the FastAPI service without changing either frontend.

@@ -49,6 +49,16 @@
 - Added five runnable agent eval/structural tests in `tests/pipelines/test_langgraph_agent.py`.
   Existing RAG tests remain passing alongside the new graph evaluations.
 
+## LangGraph External Incident Tool
+
+- Extended `services/agent/` with a typed, read-only ticket lookup that calls
+  `services.api.incidents.get_incident()` rather than a simulated dataset.
+- Added automatic classify/RAG/ticket/both routing and a 3-second incident lookup
+  timeout. Missing, failed, and timed-out tickets use an explicit honest fallback.
+- Extended agent traces to record the routing decision, source order, and live
+  ticket result when applicable.
+- Added ticket-routing, RAG-routing, not-found, contract, and timeout evals.
+
 ## INFRA-40 — Dockerization & Production Deploy
 
 - Dockerized the entire monorepo for reproducible development environments.
